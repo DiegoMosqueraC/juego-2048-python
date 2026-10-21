@@ -13,28 +13,38 @@ Controles:
 - Q / ESC: Salir del juego
 """
 
-import curses
-import sys
-from typing import Optional
 from logic import Game2048
 
+# BUG-10: en Windows la biblioteca estándar no incluye '_curses'. En lugar de
+# fallar al importar, se registra su ausencia y se usa un modo de texto básico.
+try:
+    import curses
+    CURSES_AVAILABLE = True
+except ImportError:
+    curses = None
+    CURSES_AVAILABLE = False
 
-# Definición de paleta de colores para las fichas según su valor
-# Asociamos cada número con colores de texto y fondo en curses
-TILE_COLORS = {
-    0: (curses.COLOR_WHITE, curses.COLOR_BLACK),
-    2: (curses.COLOR_BLACK, curses.COLOR_WHITE),
-    4: (curses.COLOR_BLACK, curses.COLOR_CYAN),
-    8: (curses.COLOR_WHITE, curses.COLOR_BLUE),
-    16: (curses.COLOR_WHITE, curses.COLOR_MAGENTA),
-    32: (curses.COLOR_WHITE, curses.COLOR_RED),
-    64: (curses.COLOR_YELLOW, curses.COLOR_RED),
-    128: (curses.COLOR_BLACK, curses.COLOR_YELLOW),
-    256: (curses.COLOR_WHITE, curses.COLOR_YELLOW),
-    512: (curses.COLOR_CYAN, curses.COLOR_YELLOW),
-    1024: (curses.COLOR_MAGENTA, curses.COLOR_YELLOW),
-    2048: (curses.COLOR_RED, curses.COLOR_WHITE),
-}
+# Teclas de flecha en Windows: msvcrt devuelve un prefijo y luego este código.
+WINDOWS_ARROW_CODES = {"H": "w", "P": "s", "K": "a", "M": "d"}
+BASIC_KEY_TO_DIRECTION = {"a": "left", "d": "right", "w": "up", "s": "down"}
+
+
+def _curses_tile_colors() -> dict:
+    """Paleta de colores de las fichas (solo se construye si curses existe)."""
+    return {
+        0: (curses.COLOR_WHITE, curses.COLOR_BLACK),
+        2: (curses.COLOR_BLACK, curses.COLOR_WHITE),
+        4: (curses.COLOR_BLACK, curses.COLOR_CYAN),
+        8: (curses.COLOR_WHITE, curses.COLOR_BLUE),
+        16: (curses.COLOR_WHITE, curses.COLOR_MAGENTA),
+        32: (curses.COLOR_WHITE, curses.COLOR_RED),
+        64: (curses.COLOR_YELLOW, curses.COLOR_RED),
+        128: (curses.COLOR_BLACK, curses.COLOR_YELLOW),
+        256: (curses.COLOR_WHITE, curses.COLOR_YELLOW),
+        512: (curses.COLOR_CYAN, curses.COLOR_YELLOW),
+        1024: (curses.COLOR_MAGENTA, curses.COLOR_YELLOW),
+        2048: (curses.COLOR_RED, curses.COLOR_WHITE),
+    }
 
 
 class TerminalGame:
@@ -76,7 +86,7 @@ class TerminalGame:
         # Pares del 10 en adelante para cada ficha según su potencia de 2
         pair_id = 10
         self.tile_pair_map = {}
-        for val, (fg, bg) in TILE_COLORS.items():
+        for val, (fg, bg) in _curses_tile_colors().items():
             curses.init_pair(pair_id, fg, bg)
             self.tile_pair_map[val] = pair_id
             pair_id += 1
