@@ -138,6 +138,19 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
 
     server: GameServer
 
+    # BUG-21: en Windows, mimetypes consulta el registro, que puede asociar .js a
+    # text/plain; con la cabecera nosniff el navegador no ejecutaría los scripts.
+    extensions_map = {
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".ico": "image/x-icon",
+        ".json": "application/json",
+        "": "application/octet-stream",
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
@@ -235,6 +248,10 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         for name, value in SECURITY_HEADERS.items():
             self.send_header(name, value)
+        if not urlsplit(self.path).path.startswith("/api/"):
+            # Obliga a revalidar los archivos estáticos: tras actualizar el juego
+            # el navegador no usa versiones viejas de app.js o style.css.
+            self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
     def log_message(self, message_format: str, *args) -> None:

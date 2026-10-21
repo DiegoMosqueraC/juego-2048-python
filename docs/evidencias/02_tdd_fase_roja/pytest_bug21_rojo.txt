@@ -1,0 +1,31 @@
+$ pytest tests/test_regresion.py -k bug21 -v --tb=line
+============================= test session starts =============================
+platform win32 -- Python 3.10.11, pytest-9.1.1, pluggy-1.7.0 -- <venv>\Scripts\python.exe
+rootdir: C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048
+configfile: setup.cfg
+plugins: cov-7.1.0
+collecting ... collected 35 items / 31 deselected / 4 selected
+
+tests/test_regresion.py::test_bug21_static_files_are_served_with_correct_mime_type[/app.js-text/javascript] FAILED [ 25%]
+tests/test_regresion.py::test_bug21_static_files_are_served_with_correct_mime_type[/game-utils.js-text/javascript] FAILED [ 50%]
+tests/test_regresion.py::test_bug21_static_files_are_served_with_correct_mime_type[/style.css-text/css] PASSED [ 75%]
+tests/test_regresion.py::test_bug21_static_files_are_served_with_correct_mime_type[/-text/html] PASSED [100%]
+
+================================== FAILURES ===================================
+E   AssertionError: assert False
+     +  where False = <built-in method startswith of str object at 0x000001A68E20FF30>('text/javascript')
+     +    where <built-in method startswith of str object at 0x000001A68E20FF30> = 'text/plain'.startswith
+---------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [21/Oct/2026 09:47:48] "GET /app.js HTTP/1.1" 200 -
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:219: AssertionError: assert False
+E   AssertionError: assert False
+     +  where False = <built-in method startswith of str object at 0x000001A68E20D6B0>('text/javascript')
+     +    where <built-in method startswith of str object at 0x000001A68E20D6B0> = 'text/plain'.startswith
+---------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [21/Oct/2026 09:47:48] "GET /game-utils.js HTTP/1.1" 200 -
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:219: AssertionError: assert False
+=========================== short test summary info ===========================
+FAILED tests/test_regresion.py::test_bug21_static_files_are_served_with_correct_mime_type[/app.js-text/javascript]
+FAILED tests/test_regresion.py::test_bug21_static_files_are_served_with_correct_mime_type[/game-utils.js-text/javascript]
+================= 2 failed, 2 passed, 31 deselected in 0.58s ==================
+[código de salida: 1]
