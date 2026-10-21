@@ -399,6 +399,8 @@ class GameClient {
     /** Muestra u oculta los diálogos de victoria y fin, y anuncia los cambios. */
     updateDialogs(previousStatus, state, firstLoad) {
         this.el.finalScore.textContent = state.score.toLocaleString("es-CO");
+        // Sin historial (p. ej., tras recargar la página) no hay jugada que deshacer.
+        document.getElementById("btn-over-undo").disabled = !state.can_undo;
         this.toggleModal("win", state.status === "won");
         this.toggleModal("over", state.status === "game_over");
         // BUG-14: sonido y anuncio solo al ENTRAR en el estado, nunca al recargar.
