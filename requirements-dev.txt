@@ -1,0 +1,6 @@
+# Dependencias SOLO de desarrollo y aseguramiento de calidad.
+# El juego se ejecuta únicamente con la biblioteca estándar de Python (>= 3.10).
+pytest==9.1.1
+pytest-cov==7.1.0
+flake8==7.4.1
+bandit==1.9.4

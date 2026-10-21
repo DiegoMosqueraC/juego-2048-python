@@ -1,0 +1,4 @@
+# Normaliza los finales de línea para que el repositorio sea igual en Windows y Linux.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
