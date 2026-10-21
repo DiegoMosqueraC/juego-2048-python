@@ -22,6 +22,7 @@ import sys
 import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from typing import Dict, Any
+from urllib.parse import urlsplit
 
 from logic import Game2048
 
@@ -30,6 +31,19 @@ GAME_INSTANCE = Game2048()
 
 # Ruta al directorio que contiene los archivos estáticos de la interfaz web
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+
+# Tamaño máximo aceptado para el cuerpo de una petición (BUG-02: evita DoS).
+MAX_BODY_BYTES = 1024
+# Nombres de host locales aceptados (BUG-03: protección ante DNS rebinding).
+ALLOWED_HOSTNAMES = ("127.0.0.1", "localhost", "[::1]")
+
+
+class BadRequestError(Exception):
+    """Error de validación de una petición HTTP, con su código de estado."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
 
 
 class Game2048HTTPHandler(SimpleHTTPRequestHandler):
@@ -48,13 +62,45 @@ class Game2048HTTPHandler(SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(payload)
 
+    def _host_is_allowed(self) -> bool:
+        """Acepta solo peticiones dirigidas a un nombre de host local (BUG-03)."""
+        host = self.headers.get("Host")
+        if host is None:
+            return True
+        hostname = host.rsplit(":", 1)[0] if not host.endswith("]") else host
+        return hostname in ALLOWED_HOSTNAMES
+
+    def _read_json_body(self) -> Dict[str, Any]:
+        """Lee y valida el cuerpo JSON de la petición (BUG-02)."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            raise BadRequestError(400, "Content-Length inválido")
+        if length < 0:
+            raise BadRequestError(400, "Content-Length inválido")
+        if length > MAX_BODY_BYTES:
+            self.close_connection = True
+            raise BadRequestError(413, "El cuerpo de la petición es demasiado grande")
+        if length == 0:
+            return {}
+        try:
+            data = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise BadRequestError(400, "El cuerpo debe ser JSON válido")
+        if not isinstance(data, dict):
+            raise BadRequestError(400, "El cuerpo debe ser un objeto JSON")
+        return data
+
     def do_GET(self) -> None:
         """Maneja peticiones GET. Atiende la API o sirve archivos estáticos."""
+        if not self._host_is_allowed():
+            self._send_json_response({"error": "Host no permitido"}, status=403)
+            return
+        self.path = urlsplit(self.path).path  # BUG-04: ignora la query string
         if self.path == "/api/state":
             # Retorna el estado actual del juego
             self._send_json_response(GAME_INSTANCE.to_dict())
@@ -73,16 +119,21 @@ class Game2048HTTPHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         """Maneja peticiones POST para los comandos de juego."""
-        # Leer el cuerpo de la petición si existe
-        content_length = int(self.headers.get("Content-Length", 0))
-        body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
-        
-        post_data = {}
-        if body_bytes:
-            try:
-                post_data = json.loads(body_bytes.decode("utf-8"))
-            except Exception:
-                pass
+        if not self._host_is_allowed():
+            self._send_json_response({"error": "Host no permitido"}, status=403)
+            return
+        self.path = urlsplit(self.path).path
+        # BUG-03: exigir JSON obliga a los navegadores a una verificación CORS previa,
+        # que este servidor no autoriza; así otros sitios no pueden enviar comandos.
+        content_type = self.headers.get("Content-Type", "")
+        if not content_type.startswith("application/json"):
+            self._send_json_response({"error": "Se requiere application/json"}, 415)
+            return
+        try:
+            post_data = self._read_json_body()
+        except BadRequestError as error:
+            self._send_json_response({"error": str(error)}, status=error.status)
+            return
 
         if self.path == "/api/move":
             direction = post_data.get("direction", "")

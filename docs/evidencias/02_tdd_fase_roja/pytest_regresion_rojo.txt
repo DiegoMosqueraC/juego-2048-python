@@ -1,0 +1,283 @@
+$ pytest tests/test_regresion.py -v --tb=line
+============================= test session starts =============================
+platform win32 -- Python 3.10.11, pytest-9.1.1, pluggy-1.7.0 -- <venv>\Scripts\python.exe
+rootdir: C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048
+configfile: setup.cfg
+plugins: cov-7.1.0
+collecting ... collected 28 items
+
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[None] FAILED [  3%]
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[5] FAILED [  7%]
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[3.5] FAILED [ 10%]
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[direction3] FAILED [ 14%]
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[direction4] FAILED [ 17%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[body0] FAILED [ 21%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[left] FAILED [ 25%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[42] FAILED [ 28%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[body3] FAILED [ 32%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[{no es json] PASSED [ 35%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[\xff\xfe] PASSED [ 39%]
+tests/test_regresion.py::test_bug02_non_numeric_content_length_returns_400 FAILED [ 42%]
+tests/test_regresion.py::test_bug02_oversized_body_is_rejected_with_413 ----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 54667)
+Traceback (most recent call last):
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 91, in do_POST
+    moved = GAME_INSTANCE.move(direction)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\logic.py", line 217, in move
+    raise ValueError(f"Dirección inválida: {direction}")
+ValueError: Dirección inválida: 
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 316, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 347, in process_request
+    self.finish_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 43, in __init__
+    super().__init__(*args, directory=STATIC_DIR, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 668, in __init__
+    super().__init__(*args, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 433, in handle
+    self.handle_one_request()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 98, in do_POST
+    self._send_json_response({"error": str(e)}, status=400)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 54, in _send_json_response
+    self.wfile.write(payload)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host
+----------------------------------------
+FAILED [ 46%]
+tests/test_regresion.py::test_bug03_api_does_not_allow_any_origin FAILED [ 50%]
+tests/test_regresion.py::test_bug03_post_without_json_content_type_is_rejected FAILED [ 53%]
+tests/test_regresion.py::test_bug03_foreign_host_header_is_rejected FAILED [ 57%]
+tests/test_regresion.py::test_bug04_state_route_accepts_query_string FAILED [ 60%]
+tests/test_regresion.py::test_bug05_continue_before_winning_does_not_disable_victory FAILED [ 64%]
+tests/test_regresion.py::test_bug06_moves_are_blocked_while_victory_is_pending FAILED [ 67%]
+tests/test_regresion.py::test_bug07_to_dict_returns_a_copy_of_the_grid FAILED [ 71%]
+tests/test_regresion.py::test_bug08_record_file_does_not_depend_on_working_directory FAILED [ 75%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[-50-0] FAILED [ 78%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[12.7-0] FAILED [ 82%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[abc-0] PASSED [ 85%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[True-0] FAILED [ 89%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[None-0] PASSED [ 92%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[3132-3132] PASSED [ 96%]
+tests/test_regresion.py::test_bug10_terminal_module_loads_without_curses FAILED [100%]
+
+================================== FAILURES ===================================
+E   AttributeError: 'NoneType' object has no attribute 'strip'
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\logic.py:215: AttributeError: 'NoneType' object has no attribute 'strip'
+E   AttributeError: 'int' object has no attribute 'strip'
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\logic.py:215: AttributeError: 'int' object has no attribute 'strip'
+E   AttributeError: 'float' object has no attribute 'strip'
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\logic.py:215: AttributeError: 'float' object has no attribute 'strip'
+E   AttributeError: 'list' object has no attribute 'strip'
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\logic.py:215: AttributeError: 'list' object has no attribute 'strip'
+E   AttributeError: 'dict' object has no attribute 'strip'
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\logic.py:215: AttributeError: 'dict' object has no attribute 'strip'
+E   http.client.RemoteDisconnected: Remote end closed connection without response
+---------------------------- Captured stderr call -----------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 54651)
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 316, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 347, in process_request
+    self.finish_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 43, in __init__
+    super().__init__(*args, directory=STATIC_DIR, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 668, in __init__
+    super().__init__(*args, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 433, in handle
+    self.handle_one_request()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 88, in do_POST
+    direction = post_data.get("direction", "")
+AttributeError: 'list' object has no attribute 'get'
+----------------------------------------
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\client.py:287: http.client.RemoteDisconnected: Remote end closed connection without response
+E   http.client.RemoteDisconnected: Remote end closed connection without response
+---------------------------- Captured stderr call -----------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 54653)
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 316, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 347, in process_request
+    self.finish_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 43, in __init__
+    super().__init__(*args, directory=STATIC_DIR, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 668, in __init__
+    super().__init__(*args, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 433, in handle
+    self.handle_one_request()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 88, in do_POST
+    direction = post_data.get("direction", "")
+AttributeError: 'str' object has no attribute 'get'
+----------------------------------------
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\client.py:287: http.client.RemoteDisconnected: Remote end closed connection without response
+E   http.client.RemoteDisconnected: Remote end closed connection without response
+---------------------------- Captured stderr call -----------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 54655)
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 316, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 347, in process_request
+    self.finish_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 43, in __init__
+    super().__init__(*args, directory=STATIC_DIR, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 668, in __init__
+    super().__init__(*args, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 433, in handle
+    self.handle_one_request()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 88, in do_POST
+    direction = post_data.get("direction", "")
+AttributeError: 'int' object has no attribute 'get'
+----------------------------------------
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\client.py:287: http.client.RemoteDisconnected: Remote end closed connection without response
+E   http.client.RemoteDisconnected: Remote end closed connection without response
+---------------------------- Captured stderr call -----------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 54657)
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 316, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 347, in process_request
+    self.finish_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 43, in __init__
+    super().__init__(*args, directory=STATIC_DIR, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 668, in __init__
+    super().__init__(*args, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 433, in handle
+    self.handle_one_request()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 91, in do_POST
+    moved = GAME_INSTANCE.move(direction)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\logic.py", line 215, in move
+    dir_lower = direction.strip().lower()
+AttributeError: 'int' object has no attribute 'strip'
+----------------------------------------
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\client.py:287: http.client.RemoteDisconnected: Remote end closed connection without response
+E   IndexError: list index out of range
+---------------------------- Captured stderr call -----------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 54665)
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 316, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 347, in process_request
+    self.finish_request(request, client_address)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 43, in __init__
+    super().__init__(*args, directory=STATIC_DIR, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 668, in __init__
+    super().__init__(*args, **kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socketserver.py", line 747, in __init__
+    self.handle()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 433, in handle
+    self.handle_one_request()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\http\server.py", line 421, in handle_one_request
+    method()
+  File "C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\web_ui.py", line 77, in do_POST
+    content_length = int(self.headers.get("Content-Length", 0))
+ValueError: invalid literal for int() with base 10: 'abc'
+----------------------------------------
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\helpers.py:46: IndexError: list index out of range
+E   TimeoutError: timed out
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.3056.0_x64__qbz5n2kfra8p0\lib\socket.py:705: TimeoutError: timed out
+E   AssertionError: assert '*' != '*'
+     +  where '*' = <built-in method get of dict object at 0x000001672E89F6C0>('Access-Control-Allow-Origin')
+     +    where <built-in method get of dict object at 0x000001672E89F6C0> = {'Server': 'SimpleHTTP/0.6 Python/3.10.11', 'Date': 'Wed, 21 Oct 2026 14:31:50 GMT', 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': '173', ...}.get
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:75: AssertionError: assert '*' != '*'
+E   assert 200 == 415
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:83: assert 200 == 415
+E   assert 200 == 403
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:91: assert 200 == 403
+E   assert 404 == 200
+---------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [21/Oct/2026 09:31:52] code 404, message File not found
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:100: assert 404 == 200
+E   assert False is True
+     +  where False = <logic.Game2048 object at 0x000001672E72D7E0>.won
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:112: assert False is True
+E   AssertionError: assert not True
+     +  where True = move('down')
+     +    where move = <logic.Game2048 object at 0x000001672E747790>.move
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:120: AssertionError: assert not True
+E   assert 4096 == 2
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:132: assert 4096 == 2
+E   AssertionError: assert not True
+     +  where True = exists()
+     +    where exists = (WindowsPath('C:/Users/USUARIO/AppData/Local/Temp/pytest-of-DIEGO MOSQUERA/pytest-1/test_bug08_record_file_does_no0/trabajo') / 'highscore.json').exists
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:150: AssertionError: assert not True
+E   assert -50 == 0
+     +  where -50 = <logic.Game2048 object at 0x000001672E72DC30>.highscore
+     +    where <logic.Game2048 object at 0x000001672E72DC30> = Game2048()
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:165: assert -50 == 0
+E   assert 12 == 0
+     +  where 12 = <logic.Game2048 object at 0x000001672E72E260>.highscore
+     +    where <logic.Game2048 object at 0x000001672E72E260> = Game2048()
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:165: assert 12 == 0
+E   assert 1 == 0
+     +  where 1 = <logic.Game2048 object at 0x000001672E72EC80>.highscore
+     +    where <logic.Game2048 object at 0x000001672E72EC80> = Game2048()
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\tests\test_regresion.py:165: assert 1 == 0
+E   ModuleNotFoundError: import of curses halted; None in sys.modules
+C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048\terminal_ui.py:16: ModuleNotFoundError: import of curses halted; None in sys.modules
+=========================== short test summary info ===========================
+FAILED tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[None]
+FAILED tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[5]
+FAILED tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[3.5]
+FAILED tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[direction3]
+FAILED tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[direction4]
+FAILED tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[body0]
+FAILED tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[left]
+FAILED tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[42]
+FAILED tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[body3]
+FAILED tests/test_regresion.py::test_bug02_non_numeric_content_length_returns_400
+FAILED tests/test_regresion.py::test_bug02_oversized_body_is_rejected_with_413
+FAILED tests/test_regresion.py::test_bug03_api_does_not_allow_any_origin - As...
+FAILED tests/test_regresion.py::test_bug03_post_without_json_content_type_is_rejected
+FAILED tests/test_regresion.py::test_bug03_foreign_host_header_is_rejected - ...
+FAILED tests/test_regresion.py::test_bug04_state_route_accepts_query_string
+FAILED tests/test_regresion.py::test_bug05_continue_before_winning_does_not_disable_victory
+FAILED tests/test_regresion.py::test_bug06_moves_are_blocked_while_victory_is_pending
+FAILED tests/test_regresion.py::test_bug07_to_dict_returns_a_copy_of_the_grid
+FAILED tests/test_regresion.py::test_bug08_record_file_does_not_depend_on_working_directory
+FAILED tests/test_regresion.py::test_bug09_stored_record_is_validated[-50-0]
+FAILED tests/test_regresion.py::test_bug09_stored_record_is_validated[12.7-0]
+FAILED tests/test_regresion.py::test_bug09_stored_record_is_validated[True-0]
+FAILED tests/test_regresion.py::test_bug10_terminal_module_loads_without_curses
+======================== 23 failed, 5 passed in 9.77s =========================
+[código de salida: 1]

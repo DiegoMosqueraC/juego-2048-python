@@ -1,0 +1,51 @@
+$ pytest tests/test_regresion.py tests_logic.py -v
+============================= test session starts =============================
+platform win32 -- Python 3.10.11, pytest-9.1.1, pluggy-1.7.0 -- <venv>\Scripts\python.exe
+rootdir: C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048
+configfile: setup.cfg
+plugins: cov-7.1.0
+collecting ... collected 40 items
+
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[None] PASSED [  2%]
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[5] PASSED [  5%]
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[3.5] PASSED [  7%]
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[direction3] PASSED [ 10%]
+tests/test_regresion.py::test_bug01_move_rejects_non_text_direction[direction4] PASSED [ 12%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[body0] PASSED [ 15%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[left] PASSED [ 17%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[42] PASSED [ 20%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[body3] PASSED [ 22%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[{no es json] PASSED [ 25%]
+tests/test_regresion.py::test_bug02_move_with_malformed_json_returns_400[\xff\xfe] PASSED [ 27%]
+tests/test_regresion.py::test_bug02_non_numeric_content_length_returns_400 PASSED [ 30%]
+tests/test_regresion.py::test_bug02_oversized_body_is_rejected_with_413 PASSED [ 32%]
+tests/test_regresion.py::test_bug03_api_does_not_allow_any_origin PASSED [ 35%]
+tests/test_regresion.py::test_bug03_post_without_json_content_type_is_rejected PASSED [ 37%]
+tests/test_regresion.py::test_bug03_foreign_host_header_is_rejected PASSED [ 40%]
+tests/test_regresion.py::test_bug04_state_route_accepts_query_string PASSED [ 42%]
+tests/test_regresion.py::test_bug05_continue_before_winning_does_not_disable_victory PASSED [ 45%]
+tests/test_regresion.py::test_bug06_moves_are_blocked_while_victory_is_pending PASSED [ 47%]
+tests/test_regresion.py::test_bug07_to_dict_returns_a_copy_of_the_grid PASSED [ 50%]
+tests/test_regresion.py::test_bug08_record_file_does_not_depend_on_working_directory PASSED [ 52%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[-50-0] PASSED [ 55%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[12.7-0] PASSED [ 57%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[abc-0] PASSED [ 60%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[True-0] PASSED [ 62%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[None-0] PASSED [ 65%]
+tests/test_regresion.py::test_bug09_stored_record_is_validated[3132-3132] PASSED [ 67%]
+tests/test_regresion.py::test_bug10_terminal_module_loads_without_curses PASSED [ 70%]
+tests_logic.py::TestGame2048Logic::test_game_over_detection PASSED       [ 72%]
+tests_logic.py::TestGame2048Logic::test_invalid_move_returns_false PASSED [ 75%]
+tests_logic.py::TestGame2048Logic::test_move_down PASSED                 [ 77%]
+tests_logic.py::TestGame2048Logic::test_move_left PASSED                 [ 80%]
+tests_logic.py::TestGame2048Logic::test_move_right PASSED                [ 82%]
+tests_logic.py::TestGame2048Logic::test_move_up PASSED                   [ 85%]
+tests_logic.py::TestGame2048Logic::test_row_merge_basic PASSED           [ 87%]
+tests_logic.py::TestGame2048Logic::test_row_merge_no_double_combination PASSED [ 90%]
+tests_logic.py::TestGame2048Logic::test_row_merge_three_elements PASSED  [ 92%]
+tests_logic.py::TestGame2048Logic::test_row_no_merge_when_different PASSED [ 95%]
+tests_logic.py::TestGame2048Logic::test_undo_feature PASSED              [ 97%]
+tests_logic.py::TestGame2048Logic::test_win_condition PASSED             [100%]
+
+============================= 40 passed in 6.72s ==============================
+[código de salida: 0]
