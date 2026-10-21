@@ -2,7 +2,7 @@
  * game-utils.js - Funciones puras de la interfaz web de 2048
  * ==========================================================
  * No tocan el DOM ni la red, por eso se prueban con el ejecutor de pruebas de
- * Node (node --test tests/js/*.test.js) y se reutilizan en el navegador desde app.js.
+ * Node (node --test "tests/js/*.test.js") y se reutilizan en el navegador desde app.js.
  */
 (function (root) {
     "use strict";
