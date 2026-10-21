@@ -1,0 +1,73 @@
+
+=== Análisis estático (flake8) ===
+
+=== Análisis de seguridad (bandit) ===
+[manager]	WARNING	Test in comment: solo is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: se is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: ejecutan is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: comandos is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: fijos is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: de is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: este is not a test name or id, ignoring
+[manager]	WARNING	Test in comment: archivo is not a test name or id, ignoring
+
+=== Pruebas y cobertura (pytest) ===
+============================= test session starts =============================
+platform win32 -- Python 3.10.11, pytest-9.1.1, pluggy-1.7.0
+rootdir: C:\Users\USUARIO\OneDrive\Documentos\Proyectos\2048\Juego2048
+configfile: setup.cfg
+testpaths: tests
+plugins: cov-7.1.0
+collected 273 items
+
+tests\test_game.py ..................................................... [ 19%]
+.......                                                                  [ 21%]
+tests\test_logic.py ............                                         [ 26%]
+tests\test_main.py .......................                               [ 34%]
+tests\test_regresion.py ...................................              [ 47%]
+tests\test_sistema.py .......                                            [ 50%]
+tests\test_slide_merge.py ..............                                 [ 55%]
+tests\test_storage.py .............                                      [ 60%]
+tests\test_terminal_ui.py ......................                         [ 68%]
+tests\test_validation.py ............................................... [ 85%]
+..........                                                               [ 89%]
+tests\test_web_api.py ..............................                     [100%]
+
+=============================== tests coverage ================================
+______________ coverage: platform win32, python 3.10.11-final-0 _______________
+
+Name             Stmts   Miss Branch BrPart  Cover   Missing
+------------------------------------------------------------
+config.py           16      0      0      0   100%
+logic.py           197      0     36      0   100%
+main.py             60      1     12      1    97%   119
+storage.py          49      1      4      1    96%   89
+terminal_ui.py     161     13     46      4    91%   119-126, 185->exit, 205, 254, 275-276, 281
+validation.py       41      0     20      0   100%
+web_ui.py          181      4     48      3    97%   184, 306-307, 330->332, 341
+------------------------------------------------------------
+TOTAL              705     19    166      9    97%
+Required test coverage of 90% reached. Total coverage: 96.56%
+============================= 273 passed in 7.34s =============================
+
+=== Pruebas de la interfaz (node:test) ===
+✔ actionForKey: flechas y WASD producen movimientos (3.2297ms)
+✔ actionForKey: U deshace y R reinicia (0.3184ms)
+✔ actionForKey: BUG-13, Ctrl/Cmd/Alt + tecla no activan atajos del juego (0.3297ms)
+✔ actionForKey: teclas sin función y eventos vacíos se ignoran (0.2387ms)
+✔ swipeDirection: gestos cortos no cuentan (valor límite) (0.3521ms)
+✔ swipeDirection: domina el eje con mayor desplazamiento (1.7072ms)
+✔ tileClassName: hasta la meta usa su color; mayores, el estilo especial (0.5552ms)
+✔ digitClass: clase según la cantidad de dígitos, con tope en 6 (0.569ms)
+✔ statusTransition: BUG-14, solo se anuncia al entrar en un estado (0.5108ms)
+✔ highestMergedValue: valor mayor entre las celdas fusionadas (0.8146ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 190.1861
+
+Todos los pasos del pipeline terminaron correctamente.
