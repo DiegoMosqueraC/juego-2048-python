@@ -126,12 +126,13 @@ def _read_basic_key() -> str:
     return key.lower()
 
 
-def run_basic_terminal_game(game: Game2048, read_key=_read_basic_key,
-                            output=print, width: int = 80) -> None:
+def run_basic_terminal_game(game: Game2048, read_key=None, output=print,
+                            width: int = 80) -> None:
     """
     Bucle del modo de texto: imprime la pantalla y espera una tecla.
     `read_key` y `output` se pueden sustituir por dobles de prueba.
     """
+    read_key = read_key or _read_basic_key
     while True:
         screen = header_lines(game) + [""] + board_lines(game) + [""]
         screen += footer_lines(game, width)
