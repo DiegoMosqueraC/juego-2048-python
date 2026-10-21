@@ -20,6 +20,8 @@ identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLO
 - Los archivos `.js` se sirven con el tipo MIME correcto en Windows (BUG-21).
 - Las respuestas a `HEAD` no llevan cuerpo (BUG-22).
 - «Deshacer última jugada» se deshabilita si no hay historial (BUG-23).
+- El flujo de CI calcula la caché de pip con `requirements-dev.txt` y usa las
+  acciones v7, basadas en Node.js 24 (falló en su primera ejecución en GitHub).
 
 ### Seguridad
 - Sin CORS abierto; los comandos exigen `application/json` y un `Host` local (BUG-03).

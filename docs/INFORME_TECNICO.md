@@ -18,6 +18,7 @@ integración continua.
 | Cobertura de web_ui.py y terminal_ui.py | 0 % y 0 % | 96,9 % y 90,8 % |
 | Fichas con contraste menor que 3:1 | 9 de 11 | 0 de 11 |
 | Fallos registrados y corregidos | — | 23 de 23 |
+| Ejecución del flujo de CI en GitHub Actions | No existía | 4 de 4 combinaciones aprobadas |
 
 ## 2. Proceso de trabajo
 
@@ -139,16 +140,24 @@ Todos los casos se ejecutaron y aprobaron en la versión final.
 `.github/workflows/ci.yml` ejecuta flake8, bandit, pytest con cobertura mínima
 del 90 % y node:test en Ubuntu y Windows con Python 3.10 y 3.12. El mismo
 proceso se ejecuta localmente con `python ci_local.py`
-(`docs/evidencias/04_resultado_final/ci_local.txt`). El pipeline de GitHub se
-activará al publicar el repositorio en GitHub; hasta entonces se validó con la
-ejecución local equivalente.
+(`docs/evidencias/04_resultado_final/ci_local.txt`).
+
+La primera ejecución en GitHub falló en los cuatro trabajos al instalar Python:
+`cache: pip` busca `requirements.txt` por defecto y el proyecto usa
+`requirements-dev.txt`. Además, GitHub advirtió que las acciones usadas dependían
+de Node.js 20, ya obsoleto. La rama `fix/ci-cache-pip` agregó
+`cache-dependency-path` y actualizó las acciones a la versión 7; la segunda
+ejecución aprobó las cuatro combinaciones en 1 min 52 s
+([ejecución 39628865728](https://github.com/DiegoMosqueraC/juego-2048-python/actions/runs/39628865728)).
+
+![Ejecución exitosa en GitHub Actions](img/github_actions.png)
 
 ## 8. Plan de mantenimiento
 
 | Tipo | Acción prevista | Disparador |
 | --- | --- | --- |
 | Correctivo | Todo reporte nuevo se registra como BUG-xx y se corrige con una prueba de regresión primero. | Reporte de un usuario o fallo del pipeline |
-| Adaptativo | Probar cada versión nueva de Python y de los navegadores en la matriz de CI. | Publicación de Python 3.14+ o cambios del navegador |
+| Adaptativo | Probar cada versión nueva de Python y de los navegadores en la matriz de CI. | Publicación de Python 3.14+, cambios del navegador o del entorno de CI (GitHub anunció que ubuntu-latest pasará a Ubuntu 26) |
 | Perfectivo | Guardar la partida en curso y tabla de mejores puntuaciones. | Solicitud de los usuarios |
 | Preventivo | Mantener la complejidad por función en 10 o menos y la cobertura sobre 90 %. | Cada *pull request* |
 
