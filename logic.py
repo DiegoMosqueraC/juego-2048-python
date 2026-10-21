@@ -22,13 +22,23 @@ import os
 import random
 from typing import List, Tuple, Optional, Dict, Any
 
+# Variable de entorno que permite elegir dónde se guarda el récord (BUG-08).
+DATA_DIR_ENV_VAR = "JUEGO2048_DATA_DIR"
+PROGRAM_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def default_highscore_path() -> str:
+    """Ruta absoluta del récord: no depende del directorio desde donde se ejecuta."""
+    data_dir = os.environ.get(DATA_DIR_ENV_VAR) or PROGRAM_DIR
+    return os.path.join(data_dir, "highscore.json")
+
 
 class Game2048:
     """
     Clase que gestiona el estado y la lógica de una partida de 2048.
     """
 
-    def __init__(self, size: int = 4, highscore_file: str = "highscore.json"):
+    def __init__(self, size: int = 4, highscore_file: Optional[str] = None):
         """
         Inicializa una nueva instancia del juego 2048.
 
@@ -36,7 +46,7 @@ class Game2048:
         :param highscore_file: Ruta del archivo JSON donde se almacena el récord de puntuación.
         """
         self.size: int = size
-        self.highscore_file: str = highscore_file
+        self.highscore_file: str = highscore_file or default_highscore_path()
         self.grid: List[List[int]] = []
         self.score: int = 0
         self.highscore: int = self._load_highscore()
@@ -60,10 +70,12 @@ class Game2048:
         if os.path.exists(self.highscore_file):
             try:
                 with open(self.highscore_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return int(data.get("highscore", 0))
-            except Exception:
+                    value = json.load(f).get("highscore", 0)
+            except (OSError, ValueError, AttributeError):
                 return 0
+            # BUG-09: solo se aceptan enteros no negativos (bool es subclase de int).
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                return value
         return 0
 
     def _save_highscore(self) -> None:
@@ -71,6 +83,7 @@ class Game2048:
         if self.score > self.highscore:
             self.highscore = self.score
             try:
+                os.makedirs(os.path.dirname(self.highscore_file), exist_ok=True)
                 with open(self.highscore_file, "w", encoding="utf-8") as f:
                     json.dump({"highscore": self.highscore}, f, indent=4)
             except Exception as e:
@@ -209,9 +222,8 @@ class Game2048:
         :param direction: 'left', 'right', 'up' o 'down' (insensible a mayúsculas/minúsculas).
         :return: True si el tablero cambió y el movimiento fue válido; False si no hubo cambio.
         """
-        if self.game_over:
-            return False
-
+        if not isinstance(direction, str):
+            raise ValueError(f"Dirección inválida: {direction!r}")
         dir_lower = direction.strip().lower()
         if dir_lower not in ('left', 'right', 'up', 'down', 'izquierda', 'derecha', 'arriba', 'abajo'):
             raise ValueError(f"Dirección inválida: {direction}")
@@ -228,6 +240,10 @@ class Game2048:
             'down': 'down'
         }
         target_dir = dir_map[dir_lower]
+
+        # BUG-06: con la partida terminada o una victoria sin decidir no se mueve nada.
+        if self.game_over or (self.won and not self.keep_playing_after_win):
+            return False
 
         # Guardamos una copia previa del estado para comprobar si hubo cambios y para el historial
         grid_before = copy.deepcopy(self.grid)
@@ -342,13 +358,18 @@ class Game2048:
 
         return False
 
-    def continue_playing(self) -> None:
+    def continue_playing(self) -> bool:
         """
         Permite al jugador seguir jugando tras alcanzar la ficha 2048
         para buscar puntuaciones más altas (4096, 8192, etc.).
+
+        :return: True si había una victoria pendiente; False en caso contrario (BUG-05).
         """
+        if not self.won:
+            return False
         self.keep_playing_after_win = True
         self.won = False
+        return True
 
     # -------------------------------------------------------------------------
     # Función Deshacer (Undo)
@@ -384,7 +405,7 @@ class Game2048:
         """
         return {
             "size": self.size,
-            "grid": self.grid,
+            "grid": [row[:] for row in self.grid],
             "score": self.score,
             "highscore": self.highscore,
             "won": self.won,
