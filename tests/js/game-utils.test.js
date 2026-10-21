@@ -1,6 +1,6 @@
 /**
  * Pruebas unitarias de static/game-utils.js con el ejecutor nativo de Node:
- *   node --test tests/js/*.test.js
+ *   node --test "tests/js/*.test.js"
  * No requieren instalar dependencias (node:test está incluido desde Node 18).
  */
 "use strict";

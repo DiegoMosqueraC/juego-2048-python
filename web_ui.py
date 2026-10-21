@@ -243,7 +243,8 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(payload)
+        if self.command != "HEAD":  # Una respuesta a HEAD no lleva cuerpo (RFC 9110).
+            self.wfile.write(payload)
 
     def end_headers(self) -> None:
         for name, value in SECURITY_HEADERS.items():
