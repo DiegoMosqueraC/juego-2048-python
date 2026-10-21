@@ -1,5 +1,7 @@
 # 2048 en Python
 
+[![CI](https://github.com/DiegoMosqueraC/juego-2048-python/actions/workflows/ci.yml/badge.svg)](https://github.com/DiegoMosqueraC/juego-2048-python/actions/workflows/ci.yml)
+
 Recreación del juego **2048** (Cirulli, 2014) escrita en Python con la biblioteca
 estándar: no necesita instalar paquetes para jugar. Ofrece una **interfaz web**
 con animaciones, sonido y accesibilidad, y un **modo terminal** que funciona en
@@ -106,6 +108,8 @@ bandit -r . -x ./tests,./docs           # análisis de seguridad
 
 El flujo [`.github/workflows/ci.yml`](.github/workflows/ci.yml) ejecuta los mismos
 pasos en Ubuntu y Windows con Python 3.10 y 3.12 en cada *push* o *pull request*.
+Los resultados están en la pestaña
+[Actions](https://github.com/DiegoMosqueraC/juego-2048-python/actions) del repositorio.
 
 ## Mantenimiento y control de versiones
 
