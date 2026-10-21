@@ -39,6 +39,7 @@ def make_game(tmp_path):
 def api_server(tmp_path, monkeypatch):
     """Levanta el servidor web real en un puerto libre y lo detiene al terminar."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("JUEGO2048_DATA_DIR", str(tmp_path))
     import web_ui
 
     server = HTTPServer(("127.0.0.1", 0), web_ui.Game2048HTTPHandler)

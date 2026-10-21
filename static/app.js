@@ -120,6 +120,13 @@ class SoundEffects {
     }
 }
 
+// El servidor solo acepta comandos con cuerpo JSON (protección BUG-03).
+const JSON_POST = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+};
+
 // -----------------------------------------------------------------------------
 // Cliente Principal del Juego 2048
 // -----------------------------------------------------------------------------
@@ -207,7 +214,7 @@ class GameClient {
         if (this.isProcessing) return;
         this.isProcessing = true;
         try {
-            const res = await fetch("/api/undo", { method: "POST" });
+            const res = await fetch("/api/undo", JSON_POST);
             if (res.ok) {
                 const data = await res.json();
                 this.render(data);
@@ -222,7 +229,7 @@ class GameClient {
 
     async reset() {
         try {
-            const res = await fetch("/api/reset", { method: "POST" });
+            const res = await fetch("/api/reset", JSON_POST);
             if (res.ok) {
                 const data = await res.json();
                 this.modalWin.classList.add("hidden");
@@ -238,7 +245,7 @@ class GameClient {
 
     async continuePlaying() {
         try {
-            const res = await fetch("/api/continue", { method: "POST" });
+            const res = await fetch("/api/continue", JSON_POST);
             if (res.ok) {
                 const data = await res.json();
                 this.modalWin.classList.add("hidden");
