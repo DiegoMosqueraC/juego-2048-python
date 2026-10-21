@@ -195,3 +195,25 @@ def test_bug11_terminal_messages_fit_the_window_width(make_game, width):
     lines = terminal_ui.footer_lines(game, width)
     assert all(len(line) <= width for line in lines)
     assert "2048" in " ".join(lines)  # el aviso de victoria no se pierde
+
+
+# -----------------------------------------------------------------------------
+# BUG-21 (detectado en la prueba de sistema): en Windows, mimetypes consulta el
+# registro y puede servir .js como text/plain; con nosniff el navegador no lo ejecuta.
+# -----------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "path, expected_type",
+    [
+        ("/app.js", "text/javascript"),
+        ("/game-utils.js", "text/javascript"),
+        ("/style.css", "text/css"),
+        ("/", "text/html"),
+    ],
+)
+def test_bug21_static_files_are_served_with_correct_mime_type(
+    api_server, path, expected_type
+):
+    status, headers, _ = send_request(api_server, "GET", path)
+    assert status == 200
+    assert headers["Content-Type"].startswith(expected_type)

@@ -32,7 +32,8 @@ def send_request(server, method, path, body=None, headers=None, timeout=3):
         raw = response.read().decode("utf-8")
         content_type = response.getheader("Content-Type", "")
         data = json.loads(raw) if "application/json" in content_type else raw
-        return response.status, dict(response.getheaders()), data
+        # response.headers busca las cabeceras sin distinguir mayúsculas.
+        return response.status, response.headers, data
     finally:
         connection.close()
 

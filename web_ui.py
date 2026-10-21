@@ -138,6 +138,19 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
 
     server: GameServer
 
+    # BUG-21: en Windows, mimetypes consulta el registro, que puede asociar .js a
+    # text/plain; con la cabecera nosniff el navegador no ejecutaría los scripts.
+    extensions_map = {
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".ico": "image/x-icon",
+        ".json": "application/json",
+        "": "application/octet-stream",
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
