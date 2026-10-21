@@ -8,25 +8,34 @@ el archivo real del récord ni depende del azar sin control.
 
 import random
 import threading
-from http.server import HTTPServer
 
 import pytest
 
+from config import DEFAULT_BOARD_SIZE
+from doubles import FakeHighscoreStorage
 from logic import Game2048
-
-
-@pytest.fixture(autouse=True)
-def fixed_random_seed():
-    """Fija la semilla global para que las fichas aleatorias sean reproducibles."""
-    random.seed(2048)
+from web_ui import create_server
 
 
 @pytest.fixture
-def make_game(tmp_path):
-    """Fábrica de partidas aisladas: el récord se guarda en un directorio temporal."""
+def storage():
+    """Récord en memoria (doble de prueba "fake"), nuevo para cada prueba."""
+    return FakeHighscoreStorage()
 
-    def factory(grid=None, score=0):
-        game = Game2048(highscore_file=str(tmp_path / "highscore.json"))
+
+@pytest.fixture
+def make_game(storage):
+    """
+    Fábrica de partidas aisladas.
+
+    :param grid: tablero inicial opcional (define también el tamaño).
+    :param rng: generador aleatorio; por defecto uno con semilla fija.
+    """
+
+    def factory(grid=None, score=0, size=DEFAULT_BOARD_SIZE, rng=None):
+        board_size = len(grid) if grid is not None else size
+        game = Game2048(size=board_size, storage=storage,
+                        rng=rng if rng is not None else random.Random(2048))
         if grid is not None:
             game.grid = [list(row) for row in grid]
             game.score = score
@@ -36,14 +45,11 @@ def make_game(tmp_path):
 
 
 @pytest.fixture
-def api_server(tmp_path, monkeypatch):
+def api_server(make_game):
     """Levanta el servidor web real en un puerto libre y lo detiene al terminar."""
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("JUEGO2048_DATA_DIR", str(tmp_path))
-    import web_ui
-
-    server = HTTPServer(("127.0.0.1", 0), web_ui.Game2048HTTPHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server = create_server(make_game(), port=0)
+    # Un intervalo de sondeo corto hace que shutdown() termine casi de inmediato.
+    thread = threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True)
     thread.start()
     yield server
     server.shutdown()

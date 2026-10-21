@@ -1,408 +1,382 @@
 """
-logic.py - Núcleo de Lógica del Juego 2048
+logic.py - Núcleo de lógica del juego 2048
 ==========================================
-Este módulo contiene la implementación pura de las reglas, el estado y las mecánicas
-del clásico juego 2048. Está desacoplado de cualquier interfaz gráfica o de terminal,
-lo que permite utilizarlo tanto en consolas como en entornos gráficos o web.
+Implementación pura de las reglas, el estado y las mecánicas del juego. No
+depende de ninguna interfaz (web o terminal) ni del disco: el almacenamiento del
+récord y el generador de números aleatorios se reciben por inyección de
+dependencias, lo que permite probar cada regla de forma aislada y repetible.
 
 Reglas implementadas:
-1. Tablero de 4x4 casillas.
-2. Inicio con 2 fichas aleatorias (90% de probabilidad de ser 2, 10% de ser 4).
-3. Desplazamiento y combinación en 4 direcciones (Izquierda, Derecha, Arriba, Abajo).
-4. Regla de combinación única por movimiento: [2, 2, 2, 2] se convierte en [4, 4, 0, 0].
-5. Generación de nueva ficha únicamente si el tablero sufrió algún cambio tras el movimiento.
-6. Detección de victoria al alcanzar la ficha 2048.
-7. Detección de fin de juego (Game Over) cuando no hay celdas vacías ni movimientos posibles.
-8. Sistema de Deshacer (Undo) para revertir jugadas.
+1. Tablero cuadrado (4x4 por defecto, configurable entre 2x2 y 8x8).
+2. Inicio con 2 fichas aleatorias (90 % de probabilidad de 2 y 10 % de 4).
+3. Desplazamiento y fusión en 4 direcciones con un único algoritmo por línea.
+4. Una ficha se fusiona una sola vez por jugada: [2, 2, 2, 2] -> [4, 4, 0, 0].
+5. Solo aparece una ficha nueva si el tablero cambió con la jugada.
+6. Victoria al alcanzar 2048; el jugador decide si continúa.
+7. Fin de juego cuando no hay celdas vacías ni fusiones posibles.
+8. Deshacer las últimas jugadas (historial limitado).
 """
 
-import copy
-import json
-import os
 import random
-from typing import List, Tuple, Optional, Dict, Any
+from collections import deque
+from dataclasses import dataclass, replace
+from typing import Optional, Sequence
 
-# Variable de entorno que permite elegir dónde se guarda el récord (BUG-08).
-DATA_DIR_ENV_VAR = "JUEGO2048_DATA_DIR"
-PROGRAM_DIR = os.path.dirname(os.path.abspath(__file__))
+from config import (
+    DEFAULT_BOARD_SIZE,
+    INITIAL_TILE_COUNT,
+    MAX_UNDO_HISTORY,
+    PROBABILITY_OF_FOUR,
+    WINNING_TILE,
+)
+from storage import HighscoreStorage, JsonHighscoreStorage
+from validation import normalize_direction, validate_board_size
+
+Cell = tuple[int, int]
+Grid = list[list[int]]
 
 
-def default_highscore_path() -> str:
-    """Ruta absoluta del récord: no depende del directorio desde donde se ejecuta."""
-    data_dir = os.environ.get(DATA_DIR_ENV_VAR) or PROGRAM_DIR
-    return os.path.join(data_dir, "highscore.json")
+# -----------------------------------------------------------------------------
+# Resultados de una jugada (datos inmutables)
+# -----------------------------------------------------------------------------
 
+@dataclass(frozen=True)
+class LineMove:
+    """Desplazamiento de una ficha dentro de una línea, en índices de esa línea."""
+
+    source: int
+    target: int
+    merged: bool
+
+
+@dataclass(frozen=True)
+class LineResult:
+    """Resultado de comprimir y fusionar una línea hacia su índice 0."""
+
+    values: tuple[int, ...]
+    points: int
+    moves: tuple[LineMove, ...]
+    merged_targets: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class TileMove:
+    """Desplazamiento de una ficha en el tablero; la interfaz web lo usa para animar."""
+
+    from_cell: Cell
+    to_cell: Cell
+    value: int
+    merged: bool
+
+    def to_dict(self) -> dict:
+        return {
+            "from": list(self.from_cell),
+            "to": list(self.to_cell),
+            "value": self.value,
+            "merged": self.merged,
+        }
+
+
+@dataclass(frozen=True)
+class MoveResult:
+    """
+    Resumen de una jugada. Se evalúa como True si el tablero cambió, por lo que
+    sigue siendo compatible con el uso anterior: `if game.move("left"): ...`.
+    """
+
+    moved: bool
+    points: int = 0
+    tile_moves: tuple[TileMove, ...] = ()
+    merged_cells: tuple[Cell, ...] = ()
+    new_tile: Optional[tuple[int, int, int]] = None
+
+    def __bool__(self) -> bool:
+        return self.moved
+
+    def to_dict(self) -> dict:
+        new_tile = None
+        if self.new_tile is not None:
+            row, col, value = self.new_tile
+            new_tile = {"row": row, "col": col, "value": value}
+        return {
+            "moved": self.moved,
+            "points": self.points,
+            "tile_moves": [tile_move.to_dict() for tile_move in self.tile_moves],
+            "merged_cells": [list(cell) for cell in self.merged_cells],
+            "new_tile": new_tile,
+        }
+
+
+# -----------------------------------------------------------------------------
+# Algoritmo central: una línea a la vez
+# -----------------------------------------------------------------------------
+
+def slide_and_merge_line(line: Sequence[int]) -> LineResult:
+    """
+    Desplaza las fichas de una línea hacia el índice 0 y fusiona las parejas iguales.
+
+    Recorre las fichas no vacías de izquierda a derecha: si la ficha actual es
+    igual a la siguiente, ambas ocupan el mismo destino con el doble de valor y
+    se avanza dos posiciones (así una ficha nunca se fusiona dos veces).
+
+    Ejemplo: [2, 0, 2, 4] -> valores (4, 4, 0, 0) y 4 puntos.
+
+    :param line: valores de la línea en el orden en que se desplazan.
+    :return: valores resultantes, puntos ganados y movimiento de cada ficha.
+    """
+    tiles = [(index, value) for index, value in enumerate(line) if value != 0]
+    values = [0] * len(line)
+    moves: list[LineMove] = []
+    merged_targets: list[int] = []
+    points = 0
+    target = 0
+    position = 0
+
+    while position < len(tiles):
+        source, value = tiles[position]
+        next_tile = tiles[position + 1] if position + 1 < len(tiles) else None
+        if next_tile is not None and next_tile[1] == value:
+            values[target] = value * 2
+            points += value * 2
+            moves.append(LineMove(source, target, merged=True))
+            moves.append(LineMove(next_tile[0], target, merged=True))
+            merged_targets.append(target)
+            position += 2
+        else:
+            values[target] = value
+            moves.append(LineMove(source, target, merged=False))
+            position += 1
+        target += 1
+
+    return LineResult(tuple(values), points, tuple(moves), tuple(merged_targets))
+
+
+# -----------------------------------------------------------------------------
+# Partida
+# -----------------------------------------------------------------------------
 
 class Game2048:
-    """
-    Clase que gestiona el estado y la lógica de una partida de 2048.
-    """
+    """Gestiona el estado y las reglas de una partida de 2048."""
 
-    def __init__(self, size: int = 4, highscore_file: Optional[str] = None):
+    def __init__(
+        self,
+        size: int = DEFAULT_BOARD_SIZE,
+        storage: Optional[HighscoreStorage] = None,
+        rng: Optional[random.Random] = None,
+    ):
         """
-        Inicializa una nueva instancia del juego 2048.
-
-        :param size: Tamaño de la cuadrícula (por defecto 4x4).
-        :param highscore_file: Ruta del archivo JSON donde se almacena el récord de puntuación.
+        :param size: lado del tablero (entre 2 y 8).
+        :param storage: dónde se guarda el récord; por defecto, un archivo JSON.
+        :param rng: generador aleatorio; inyectarlo con semilla hace las pruebas
+                    repetibles.
         """
-        self.size: int = size
-        self.highscore_file: str = highscore_file or default_highscore_path()
-        self.grid: List[List[int]] = []
+        self.size: int = validate_board_size(size)
+        self._storage = storage if storage is not None else JsonHighscoreStorage()
+        # El azar del juego no protege ningún secreto: no requiere un generador
+        # criptográfico (hallazgo B311 de bandit revisado y aceptado).
+        self._rng = rng if rng is not None else random.Random()  # nosec B311
+        self.grid: Grid = []
         self.score: int = 0
-        self.highscore: int = self._load_highscore()
+        self.highscore: int = self._storage.load()
         self.won: bool = False
         self.keep_playing_after_win: bool = False
         self.game_over: bool = False
-        
-        # Pila de historial para permitir la funcionalidad de 'Deshacer' (Undo)
-        # Cada elemento almacena una copia profunda del tablero y el puntaje
-        self.history: List[Tuple[List[List[int]], int]] = []
-
-        # Inicializamos el tablero con celdas vacías y generamos las 2 fichas iniciales
+        # Cada elemento guarda (tablero, puntuación) previos a una jugada.
+        self._history: deque = deque(maxlen=MAX_UNDO_HISTORY)
         self.reset()
 
-    # -------------------------------------------------------------------------
-    # Persistencia del Highscore
-    # -------------------------------------------------------------------------
+    # --- Estado derivado ---------------------------------------------------------
 
-    def _load_highscore(self) -> int:
-        """Carga la puntuación máxima guardada en disco si existe."""
-        if os.path.exists(self.highscore_file):
-            try:
-                with open(self.highscore_file, "r", encoding="utf-8") as f:
-                    value = json.load(f).get("highscore", 0)
-            except (OSError, ValueError, AttributeError):
-                return 0
-            # BUG-09: solo se aceptan enteros no negativos (bool es subclase de int).
-            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
-                return value
-        return 0
+    @property
+    def awaiting_win_decision(self) -> bool:
+        """True si el jugador llegó a 2048 y aún no decide si continúa."""
+        return self.won and not self.keep_playing_after_win
 
-    def _save_highscore(self) -> None:
-        """Guarda la puntuación máxima en disco si se ha superado el récord."""
-        if self.score > self.highscore:
-            self.highscore = self.score
-            try:
-                os.makedirs(os.path.dirname(self.highscore_file), exist_ok=True)
-                with open(self.highscore_file, "w", encoding="utf-8") as f:
-                    json.dump({"highscore": self.highscore}, f, indent=4)
-            except Exception as e:
-                print(f"Advertencia: No se pudo guardar el récord: {e}")
+    @property
+    def accepts_moves(self) -> bool:
+        return not self.game_over and not self.awaiting_win_decision
 
-    # -------------------------------------------------------------------------
-    # Inicialización y Reinicio
-    # -------------------------------------------------------------------------
+    @property
+    def can_undo(self) -> bool:
+        return len(self._history) > 0
+
+    @property
+    def status(self) -> str:
+        """'won' (victoria pendiente), 'game_over' o 'playing'."""
+        if self.awaiting_win_decision:
+            return "won"
+        if self.game_over:
+            return "game_over"
+        return "playing"
+
+    # --- Inicialización ----------------------------------------------------------
 
     def reset(self) -> None:
-        """
-        Reinicia el tablero a un estado inicial:
-        - Todas las celdas en 0.
-        - Puntuación en 0.
-        - Dos fichas aleatorias añadidas.
-        - Historial de jugadas reiniciado.
-        """
-        self.grid = [[0 for _ in range(self.size)] for _ in range(self.size)]
+        """Reinicia el tablero, la puntuación, los indicadores y el historial."""
+        self.grid = [[0] * self.size for _ in range(self.size)]
         self.score = 0
         self.won = False
         self.keep_playing_after_win = False
         self.game_over = False
-        self.history.clear()
+        self._history.clear()
+        for _ in range(INITIAL_TILE_COUNT):
+            self.add_random_tile()
 
-        # Generamos las dos primeras fichas del juego
-        self.add_random_tile()
-        self.add_random_tile()
+    # --- Fichas ------------------------------------------------------------------
 
-    # -------------------------------------------------------------------------
-    # Manipulación de Fichas
-    # -------------------------------------------------------------------------
+    def get_empty_cells(self) -> list[Cell]:
+        """Coordenadas (fila, columna) de todas las celdas vacías."""
+        return [
+            (row, col)
+            for row in range(self.size)
+            for col in range(self.size)
+            if self.grid[row][col] == 0
+        ]
 
-    def get_empty_cells(self) -> List[Tuple[int, int]]:
+    def add_random_tile(self) -> Optional[tuple[int, int, int]]:
         """
-        Encuentra y retorna todas las coordenadas (fila, columna) que tienen valor 0.
-        """
-        empty_cells = []
-        for r in range(self.size):
-            for c in range(self.size):
-                if self.grid[r][c] == 0:
-                    empty_cells.append((r, c))
-        return empty_cells
+        Coloca un 2 (90 %) o un 4 (10 %) en una celda vacía al azar.
 
-    def add_random_tile(self) -> Optional[Tuple[int, int, int]]:
-        """
-        Coloca una nueva ficha en una celda vacía aleatoria.
-        - 90% de probabilidad de generar un 2.
-        - 10% de probabilidad de generar un 4.
-        
-        :return: Tupla (fila, columna, valor) de la nueva ficha generada, o None si no hay espacio.
+        :return: (fila, columna, valor) de la ficha nueva, o None si no hay espacio.
         """
         empty_cells = self.get_empty_cells()
         if not empty_cells:
             return None
+        row, col = self._rng.choice(empty_cells)
+        value = 4 if self._rng.random() < PROBABILITY_OF_FOUR else 2
+        self.grid[row][col] = value
+        return (row, col, value)
 
-        # Escoger una posición al azar
-        r, c = random.choice(empty_cells)
-        # 90% probabilidad de 2, 10% probabilidad de 4
-        value = 2 if random.random() < 0.9 else 4
-        self.grid[r][c] = value
-        return (r, c, value)
+    # --- Jugadas -----------------------------------------------------------------
 
-    # -------------------------------------------------------------------------
-    # Mecánicas de Movimiento y Fusión
-    # -------------------------------------------------------------------------
-
-    @staticmethod
-    def _slide_and_merge_row(row: List[int]) -> Tuple[List[int], int]:
+    def move(self, direction: object) -> MoveResult:
         """
-        Aplica la compresión y fusión hacia la izquierda a una sola fila.
-        
-        Pasos del algoritmo:
-        1. Comprimir: Filtrar los ceros hacia la derecha.
-           Ejemplo: [2, 0, 2, 4] -> [2, 2, 4]
-        2. Fusionar: Comparar celdas adyacentes de izquierda a derecha.
-           Si son iguales, duplicar la primera y vaciar la segunda.
-           Avanzar para evitar combinaciones múltiples continuas (e.g., [2, 2, 2, 2] -> [4, 4]).
-           Ejemplo: [2, 2, 4] -> [4, 0, 4], sumando 4 puntos.
-        3. Comprimir de nuevo: Eliminar los huecos dejados por las fusiones y rellenar con ceros.
-           Ejemplo: [4, 0, 4] -> [4, 4, 0, 0]
-           
-        :param row: Lista de enteros representando una fila.
-        :return: Tupla con la nueva fila resultante y los puntos obtenidos en las fusiones.
+        Ejecuta una jugada en la dirección indicada.
+
+        :param direction: 'left', 'right', 'up', 'down' o su alias en español.
+        :return: MoveResult; se evalúa como True si el tablero cambió.
+        :raises ValueError: si la dirección no es válida (se valida siempre primero).
         """
-        # Paso 1: Filtrar ceros
-        compact = [val for val in row if val != 0]
-        
-        merged = []
-        points = 0
-        skip = False
+        normalized = normalize_direction(direction)
+        if not self.accepts_moves:
+            return MoveResult(moved=False)
 
-        # Paso 2: Fusionar elementos adyacentes iguales
-        for i in range(len(compact)):
-            if skip:
-                skip = False
-                continue
-            
-            # Si el elemento actual es igual al siguiente, se fusionan
-            if i + 1 < len(compact) and compact[i] == compact[i + 1]:
-                merged_val = compact[i] * 2
-                merged.append(merged_val)
-                points += merged_val
-                skip = True  # El siguiente elemento ya se fusionó, saltarlo
-            else:
-                merged.append(compact[i])
+        new_grid, result = self._compute_move(normalized)
+        if not result.moved:
+            return result
 
-        # Paso 3: Completar con ceros hasta alcanzar la longitud original
-        while len(merged) < len(row):
-            merged.append(0)
-
-        return merged, points
-
-    def _rotate_matrix_clockwise(self, matrix: List[List[int]]) -> List[List[int]]:
-        """
-        Rota la matriz 90 grados en el sentido de las agujas del reloj.
-        Esto permite reusar el movimiento hacia la izquierda para todas las direcciones.
-        """
-        return [list(row) for row in zip(*matrix[::-1])]
-
-    def _rotate_matrix_counter_clockwise(self, matrix: List[List[int]]) -> List[List[int]]:
-        """Rota la matriz 90 grados en sentido antihorario."""
-        return [list(row) for row in zip(*matrix)][::-1]
-
-    def _invert_matrix_rows(self, matrix: List[List[int]]) -> List[List[int]]:
-        """Invierte horizontalmente cada fila de la matriz (reflejo especular)."""
-        return [row[::-1] for row in matrix]
-
-    def _transpose_matrix(self, matrix: List[List[int]]) -> List[List[int]]:
-        """Transpone la matriz (filas por columnas)."""
-        return [list(row) for row in zip(*matrix)]
-
-    def move(self, direction: str) -> bool:
-        """
-        Ejecuta un movimiento en la dirección especificada ('left', 'right', 'up', 'down').
-        
-        :param direction: 'left', 'right', 'up' o 'down' (insensible a mayúsculas/minúsculas).
-        :return: True si el tablero cambió y el movimiento fue válido; False si no hubo cambio.
-        """
-        if not isinstance(direction, str):
-            raise ValueError(f"Dirección inválida: {direction!r}")
-        dir_lower = direction.strip().lower()
-        if dir_lower not in ('left', 'right', 'up', 'down', 'izquierda', 'derecha', 'arriba', 'abajo'):
-            raise ValueError(f"Dirección inválida: {direction}")
-
-        # Normalizamos a inglés
-        dir_map = {
-            'izquierda': 'left',
-            'derecha': 'right',
-            'arriba': 'up',
-            'abajo': 'down',
-            'left': 'left',
-            'right': 'right',
-            'up': 'up',
-            'down': 'down'
-        }
-        target_dir = dir_map[dir_lower]
-
-        # BUG-06: con la partida terminada o una victoria sin decidir no se mueve nada.
-        if self.game_over or (self.won and not self.keep_playing_after_win):
-            return False
-
-        # Guardamos una copia previa del estado para comprobar si hubo cambios y para el historial
-        grid_before = copy.deepcopy(self.grid)
-        score_before = self.score
-
-        new_grid: List[List[int]] = []
-        earned_points = 0
-
-        # Implementamos todas las direcciones transformando el tablero hacia 'left',
-        # aplicando la lógica de fila y devolviendo el tablero a su orientación original:
-        if target_dir == 'left':
-            for row in self.grid:
-                new_row, pts = self._slide_and_merge_row(row)
-                new_grid.append(new_row)
-                earned_points += pts
-
-        elif target_dir == 'right':
-            # Invertimos cada fila, aplicamos 'left' y volvemos a invertir
-            for row in self.grid:
-                reversed_row = row[::-1]
-                new_row, pts = self._slide_and_merge_row(reversed_row)
-                new_grid.append(new_row[::-1])
-                earned_points += pts
-
-        elif target_dir == 'up':
-            # Transponemos la matriz (las columnas pasan a ser filas), aplicamos 'left' y re-transponemos
-            transposed = self._transpose_matrix(self.grid)
-            processed_transposed = []
-            for row in transposed:
-                new_row, pts = self._slide_and_merge_row(row)
-                processed_transposed.append(new_row)
-                earned_points += pts
-            new_grid = self._transpose_matrix(processed_transposed)
-
-        elif target_dir == 'down':
-            # Transponemos, invertimos filas (como si fuera movimiento hacia la derecha de la transpuesta),
-            # procesamos y devolvemos
-            transposed = self._transpose_matrix(self.grid)
-            processed_transposed = []
-            for row in transposed:
-                reversed_row = row[::-1]
-                new_row, pts = self._slide_and_merge_row(reversed_row)
-                processed_transposed.append(new_row[::-1])
-                earned_points += pts
-            new_grid = self._transpose_matrix(processed_transposed)
-
-        # Verificamos si el tablero realmente cambió
-        if new_grid == self.grid:
-            # No hubo desplazamiento ni fusiones posibles en esta dirección
-            return False
-
-        # Guardar en el historial para permitir 'Deshacer'
-        self.history.append((grid_before, score_before))
-        # Limitar el historial a las últimas 20 jugadas para evitar consumo excesivo de memoria
-        if len(self.history) > 20:
-            self.history.pop(0)
-
-        # Actualizar el estado oficial
+        self._history.append(([row[:] for row in self.grid], self.score))
         self.grid = new_grid
-        self.score += earned_points
-        self._save_highscore()
+        self.score += result.points
+        self._update_highscore()
+        new_tile = self.add_random_tile()
+        self._update_status()
+        return replace(result, new_tile=new_tile)
 
-        # Añadir nueva ficha aleatoria en una celda vacía
-        self.add_random_tile()
+    def _compute_move(self, direction: str) -> tuple[Grid, MoveResult]:
+        """Calcula el tablero resultante sin modificar el estado actual."""
+        new_grid = [[0] * self.size for _ in range(self.size)]
+        points = 0
+        tile_moves: list[TileMove] = []
+        merged_cells: list[Cell] = []
 
-        # Verificar condiciones de Victoria y Fin de Juego
-        self._check_game_status()
+        for index in range(self.size):
+            cells = self._line_cells(direction, index)
+            line = [self.grid[row][col] for row, col in cells]
+            line_result = slide_and_merge_line(line)
+            for (row, col), value in zip(cells, line_result.values):
+                new_grid[row][col] = value
+            points += line_result.points
+            tile_moves.extend(
+                TileMove(cells[step.source], cells[step.target], line[step.source],
+                         step.merged)
+                for step in line_result.moves
+                if step.source != step.target or step.merged
+            )
+            merged_cells.extend(cells[target] for target in line_result.merged_targets)
 
-        return True
+        result = MoveResult(
+            moved=new_grid != self.grid,
+            points=points,
+            tile_moves=tuple(tile_moves),
+            merged_cells=tuple(merged_cells),
+        )
+        return new_grid, result
 
-    # -------------------------------------------------------------------------
-    # Verificación de Victoria y Fin de Juego
-    # -------------------------------------------------------------------------
-
-    def _check_game_status(self) -> None:
+    def _line_cells(self, direction: str, index: int) -> list[Cell]:
         """
-        Comprueba si el jugador ha ganado (ficha 2048) o si ha perdido (no quedan movimientos).
+        Celdas de la fila o columna `index`, ordenadas desde el borde hacia el que
+        se desplazan las fichas. Así las 4 direcciones reutilizan el mismo algoritmo.
         """
-        # Comprobar condición de victoria (aparición de una ficha >= 2048)
-        if not self.won and not self.keep_playing_after_win:
-            for row in self.grid:
-                if any(val >= 2048 for val in row):
-                    self.won = True
-                    break
+        positions = range(self.size)
+        if direction in ("right", "down"):
+            positions = reversed(positions)
+        if direction in ("left", "right"):
+            return [(index, position) for position in positions]
+        return [(position, index) for position in positions]
 
-        # Comprobar si quedan movimientos posibles
-        if not self.can_move():
-            self.game_over = True
+    # --- Victoria, derrota y récord ----------------------------------------------
+
+    def _update_highscore(self) -> None:
+        if self.score > self.highscore:
+            self.highscore = self.score
+            self._storage.save(self.highscore)
+
+    def _update_status(self) -> None:
+        if not self.keep_playing_after_win and self.max_tile() >= WINNING_TILE:
+            self.won = True
+        self.game_over = not self.can_move()
 
     def can_move(self) -> bool:
-        """
-        Determina si aún existe al menos un movimiento válido en cualquier dirección.
-        Un movimiento es posible si:
-        1. Hay al menos una celda con valor 0.
-        2. Dos celdas contiguas horizontalmente tienen el mismo valor.
-        3. Dos celdas contiguas verticalmente tienen el mismo valor.
-        """
-        # Si hay celdas vacías, siempre se puede mover
-        if len(self.get_empty_cells()) > 0:
+        """True si queda una celda vacía o dos fichas contiguas iguales."""
+        if self.get_empty_cells():
             return True
-
-        # Verificar adyacencias horizontales y verticales
-        for r in range(self.size):
-            for c in range(self.size):
-                val = self.grid[r][c]
-                # Comparar con la celda a la derecha
-                if c + 1 < self.size and val == self.grid[r][c + 1]:
-                    return True
-                # Comparar con la celda de abajo
-                if r + 1 < self.size and val == self.grid[r + 1][c]:
-                    return True
-
-        return False
+        last = self.size - 1
+        horizontal = any(
+            row[col] == row[col + 1] for row in self.grid for col in range(last)
+        )
+        vertical = any(
+            self.grid[row][col] == self.grid[row + 1][col]
+            for row in range(last)
+            for col in range(self.size)
+        )
+        return horizontal or vertical
 
     def continue_playing(self) -> bool:
         """
-        Permite al jugador seguir jugando tras alcanzar la ficha 2048
-        para buscar puntuaciones más altas (4096, 8192, etc.).
+        Permite seguir jugando tras alcanzar 2048 (buscando 4096, 8192, ...).
 
-        :return: True si había una victoria pendiente; False en caso contrario (BUG-05).
+        :return: True si había una victoria pendiente; False en otro caso (BUG-05).
         """
-        if not self.won:
+        if not self.awaiting_win_decision:
             return False
         self.keep_playing_after_win = True
         self.won = False
         return True
 
-    # -------------------------------------------------------------------------
-    # Función Deshacer (Undo)
-    # -------------------------------------------------------------------------
+    # --- Deshacer ----------------------------------------------------------------
 
     def undo(self) -> bool:
         """
-        Revierte el tablero y la puntuación al estado inmediatamente anterior.
-        :return: True si se pudo deshacer; False si no hay historial disponible.
-        """
-        if not self.history:
-            return False
+        Restaura el tablero y la puntuación previos a la última jugada.
 
-        prev_grid, prev_score = self.history.pop()
-        self.grid = prev_grid
-        self.score = prev_score
+        :return: True si se deshizo una jugada; False si no hay historial.
+        """
+        if not self._history:
+            return False
+        self.grid, self.score = self._history.pop()
         self.game_over = False
-        # Reevaluamos victoria con el tablero actual
-        self.won = any(val >= 2048 for row in self.grid for val in row) and not self.keep_playing_after_win
+        self.won = not self.keep_playing_after_win and self.max_tile() >= WINNING_TILE
         return True
 
-    # -------------------------------------------------------------------------
-    # Utilidades de Inspección y Serialización
-    # -------------------------------------------------------------------------
+    # --- Consulta y serialización ------------------------------------------------
 
     def max_tile(self) -> int:
-        """Devuelve el valor de la ficha más alta presente en el tablero."""
+        """Valor de la ficha más alta del tablero."""
         return max(max(row) for row in self.grid)
 
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Serializa el estado del juego en un diccionario (útil para APIs y frontends web).
-        """
+    def to_dict(self) -> dict:
+        """Estado serializable para la API web (el tablero se entrega como copia)."""
         return {
             "size": self.size,
             "grid": [row[:] for row in self.grid],
@@ -410,13 +384,16 @@ class Game2048:
             "highscore": self.highscore,
             "won": self.won,
             "game_over": self.game_over,
+            "status": self.status,
             "max_tile": self.max_tile(),
-            "can_undo": len(self.history) > 0
+            "winning_tile": WINNING_TILE,
+            "can_undo": self.can_undo,
         }
 
     def __str__(self) -> str:
-        """Representación simple en texto del tablero para depuración."""
-        lines = []
-        for row in self.grid:
-            lines.append(" ".join(f"{val:4d}" if val != 0 else "   ." for val in row))
-        return "\n".join(lines)
+        """Tablero en texto, alineado según la ficha más larga."""
+        width = max(4, len(str(self.max_tile())))
+        return "\n".join(
+            " ".join(str(value or "·").rjust(width) for value in row)
+            for row in self.grid
+        )
