@@ -1,323 +1,379 @@
 /**
- * app.js - Controlador Frontend para 2048 en Python
- * ==================================================
- * Gestiona la sincronización con la API en Python, los efectos de sonido
- * generados mediante Web Audio API, el renderizado reactivo del tablero y los
- * controles de teclado, táctiles (swipes) y botones.
+ * app.js - Cliente web del juego 2048
+ * ===================================
+ * Se comunica con la API de Python, dibuja el tablero con animaciones de
+ * deslizamiento, reproduce sonidos sintetizados (Web Audio API) y atiende el
+ * teclado, los gestos táctiles y los botones. Las decisiones puras (qué tecla
+ * es qué acción, cuándo anunciar una victoria...) viven en game-utils.js.
  */
+"use strict";
+
+const {
+    actionForKey,
+    swipeDirection,
+    tileClassName,
+    digitClass,
+    statusTransition,
+    highestMergedValue
+} = window.GameUtils;
+
+// Debe coincidir con --slide-duration en style.css.
+const SLIDE_DURATION_MS = 110;
+const SWIPE_THRESHOLD_PX = 35;
+const SCORE_BUBBLE_MS = 850;
+const JSON_HEADERS = { "Content-Type": "application/json" };
+const CONNECTION_ERROR = "Sin conexión con el servidor de Python. "
+    + "Verifica que la terminal del juego siga abierta.";
+const DIRECTION_PHRASES = {
+    left: "a la izquierda",
+    right: "a la derecha",
+    up: "hacia arriba",
+    down: "hacia abajo"
+};
 
 // -----------------------------------------------------------------------------
-// Módulo de Efectos de Sonido Sintetizados (Web Audio API)
+// Preferencias del usuario
+// -----------------------------------------------------------------------------
+// localStorage lanza excepciones en modo privado o con el almacenamiento
+// bloqueado (BUG-16); en ese caso el juego funciona sin recordar preferencias.
+const preferences = {
+    get(key, fallback) {
+        try {
+            const value = window.localStorage.getItem(key);
+            return value === null ? fallback : value;
+        } catch (error) {
+            return fallback;
+        }
+    },
+    set(key, value) {
+        try {
+            window.localStorage.setItem(key, String(value));
+        } catch (error) {
+            // Sin almacenamiento disponible: la preferencia dura solo esta sesión.
+        }
+    }
+};
+
+function prefersReducedMotion() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// -----------------------------------------------------------------------------
+// Efectos de sonido sintetizados (Web Audio API)
 // -----------------------------------------------------------------------------
 class SoundEffects {
     constructor() {
-        this.ctx = null;
-        this.enabled = localStorage.getItem("2048_sound") !== "false";
-    }
-
-    _initContext() {
-        if (!this.ctx) {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (AudioContext) {
-                this.ctx = new AudioContext();
-            }
-        }
-        if (this.ctx && this.ctx.state === "suspended") {
-            this.ctx.resume();
-        }
+        this.context = null;
+        this.enabled = preferences.get("2048_sound", "true") !== "false";
     }
 
     toggle() {
         this.enabled = !this.enabled;
-        localStorage.setItem("2048_sound", this.enabled);
+        preferences.set("2048_sound", this.enabled);
         return this.enabled;
     }
 
-    playMove() {
-        if (!this.enabled) return;
-        this._initContext();
-        if (!this.ctx) return;
-
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(160, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.08);
-
-        gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
-
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.08);
+    _audioContext() {
+        if (!this.enabled) {
+            return null;
+        }
+        if (!this.context) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) {
+                return null;
+            }
+            this.context = new AudioContextClass();
+        }
+        if (this.context.state === "suspended") {
+            this.context.resume();
+        }
+        return this.context;
     }
 
+    /** Reproduce un tono con caída exponencial de volumen. */
+    _tone({ type, from, to = from, volume, duration, delay = 0 }) {
+        const context = this._audioContext();
+        if (!context) {
+            return;
+        }
+        const start = context.currentTime + delay;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(from, start);
+        if (to !== from) {
+            oscillator.frequency.exponentialRampToValueAtTime(to, start + duration);
+        }
+        gain.gain.setValueAtTime(volume, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(start);
+        oscillator.stop(start + duration);
+    }
+
+    playMove() {
+        this._tone({ type: "sine", from: 160, to: 80, volume: 0.12, duration: 0.08 });
+    }
+
+    /** Las fusiones de fichas más altas suenan más agudas. */
     playMerge(value) {
-        if (!this.enabled) return;
-        this._initContext();
-        if (!this.ctx) return;
-
-        // Frecuencia dinámica: números más altos tienen notas más brillantes
-        const baseFreq = 260 + Math.min(Math.log2(value || 4) * 55, 600);
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, this.ctx.currentTime + 0.12);
-
-        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.14);
-
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.14);
+        const base = 260 + Math.min(Math.log2(value || 4) * 55, 600);
+        this._tone({ type: "triangle", from: base, to: base * 1.5, volume: 0.2, duration: 0.14 });
     }
 
     playWin() {
-        if (!this.enabled) return;
-        this._initContext();
-        if (!this.ctx) return;
-
-        // Arpegio de victoria
-        const notes = [523.25, 659.25, 783.99, 1046.50]; // Do, Mi, Sol, Do alto
-        notes.forEach((freq, idx) => {
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-            osc.type = "sine";
-            osc.frequency.value = freq;
-            const startTime = this.ctx.currentTime + idx * 0.1;
-            gain.gain.setValueAtTime(0.25, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
-
-            osc.connect(gain);
-            gain.connect(this.ctx.destination);
-            osc.start(startTime);
-            osc.stop(startTime + 0.35);
+        // Arpegio Do - Mi - Sol - Do agudo.
+        [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
+            this._tone({ type: "sine", from: frequency, volume: 0.25, duration: 0.35, delay: index * 0.1 });
         });
     }
 
     playGameOver() {
-        if (!this.enabled) return;
-        this._initContext();
-        if (!this.ctx) return;
-
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(220, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(110, this.ctx.currentTime + 0.4);
-
-        gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
-
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.4);
+        this._tone({ type: "sawtooth", from: 220, to: 110, volume: 0.18, duration: 0.4 });
     }
 }
 
-// El servidor solo acepta comandos con cuerpo JSON (protección BUG-03).
-const JSON_POST = {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}"
-};
-
 // -----------------------------------------------------------------------------
-// Cliente Principal del Juego 2048
+// Cliente del juego
 // -----------------------------------------------------------------------------
 class GameClient {
     constructor() {
         this.sound = new SoundEffects();
-        this.boardElement = document.getElementById("game-board");
-        this.tileContainer = document.getElementById("tile-container");
-        this.currentScoreEl = document.getElementById("current-score");
-        this.bestScoreEl = document.getElementById("best-score");
-        this.scoreBubbleContainer = document.getElementById("score-bubble-container");
+        this.el = {
+            board: document.getElementById("game-board"),
+            gridBackground: document.getElementById("grid-background"),
+            tiles: document.getElementById("tile-container"),
+            score: document.getElementById("current-score"),
+            best: document.getElementById("best-score"),
+            bubbles: document.getElementById("score-bubble-container"),
+            goal: document.getElementById("goal-tile"),
+            finalScore: document.getElementById("final-score-text"),
+            toast: document.getElementById("toast"),
+            announcer: document.getElementById("announcer"),
+            undo: document.getElementById("btn-undo"),
+            soundButton: document.getElementById("btn-sound"),
+            themeButton: document.getElementById("btn-theme")
+        };
+        this.modals = {
+            win: document.getElementById("modal-win"),
+            over: document.getElementById("modal-over"),
+            confirm: document.getElementById("modal-confirm")
+        };
+        this.state = null;
+        this.size = 0;
+        this.tileElements = new Map();
+        this.busy = false;
+        this.pendingDirection = null;
+        this.focusBeforeModal = null;
 
-        this.modalWin = document.getElementById("modal-win");
-        this.modalOver = document.getElementById("modal-over");
-        this.finalScoreText = document.getElementById("final-score-text");
-
-        this.btnUndo = document.getElementById("btn-undo");
-        this.btnRestart = document.getElementById("btn-restart");
-        this.btnSound = document.getElementById("btn-sound");
-        this.btnTheme = document.getElementById("btn-theme");
-
-        this.previousGrid = null;
-        this.isProcessing = false;
-
-        this.init();
+        this.setupKeyboard();
+        this.setupButtons();
+        this.setupTouch();
+        this.applyTheme(this.savedTheme());
+        this.updateSoundButton();
+        this.loadState();
     }
 
-    async init() {
-        this.setupEventListeners();
-        this.setupTouchGestures();
-        this.applySavedTheme();
-        this.updateSoundIcon();
+    // --- Comunicación con la API ----------------------------------------------
 
-        // Cargar el estado inicial del servidor Python
-        await this.fetchGameState();
-    }
-
-    // -------------------------------------------------------------------------
-    // Comunicación con la API Python
-    // -------------------------------------------------------------------------
-
-    async fetchGameState() {
+    /**
+     * GET si no hay cuerpo; POST con JSON si lo hay.
+     * @returns {Promise<{ok: boolean, status: number, data: object} | null>}
+     *          null si el servidor no respondió.
+     */
+    async request(path, body) {
+        const options = body === undefined
+            ? { cache: "no-store" }
+            : { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) };
+        let response;
         try {
-            const res = await fetch("/api/state");
-            if (res.ok) {
-                const data = await res.json();
-                this.render(data);
-            }
-        } catch (err) {
-            console.error("Error al obtener estado:", err);
+            response = await fetch(path, options);
+        } catch (error) {
+            this.showToast(CONNECTION_ERROR);
+            return null;
+        }
+        this.hideToast();
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (error) {
+            // Respuesta sin JSON: se informa con el código de estado.
+        }
+        return { ok: response.ok, status: response.status, data };
+    }
+
+    async loadState() {
+        const result = await this.request("/api/state");
+        if (result && result.ok) {
+            this.applyState(result.data, { appear: true });
         }
     }
 
-    async sendMove(direction) {
-        if (this.isProcessing) return;
-        this.isProcessing = true;
-
+    async move(direction) {
+        if (this.openModalName()) {
+            return;
+        }
+        if (this.busy) {
+            // Se recuerda la última dirección pedida para no perder pulsaciones rápidas.
+            this.pendingDirection = direction;
+            return;
+        }
+        this.busy = true;
         try {
-            const res = await fetch("/api/move", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ direction })
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                if (data.moved) {
-                    if (data.gained_points > 0) {
-                        this.sound.playMerge(data.max_tile);
-                        this.showScoreBubble(data.gained_points);
-                    } else {
-                        this.sound.playMove();
-                    }
-                    this.render(data);
-                }
+            const result = await this.request("/api/move", { direction });
+            if (result && result.ok && result.data.moved) {
+                await this.animateSlide(result.data.tile_moves);
+                this.playMoveSound(result.data);
+                this.applyState(result.data, { move: result.data });
+                this.announceMove(direction, result.data);
             }
-        } catch (err) {
-            console.error("Error al mover:", err);
         } finally {
-            this.isProcessing = false;
+            this.busy = false;
+            const next = this.pendingDirection;
+            this.pendingDirection = null;
+            if (next) {
+                this.move(next);
+            }
         }
     }
 
     async undo() {
-        if (this.isProcessing) return;
-        this.isProcessing = true;
+        if (this.busy) {
+            return;
+        }
+        this.busy = true;
         try {
-            const res = await fetch("/api/undo", JSON_POST);
-            if (res.ok) {
-                const data = await res.json();
-                this.render(data);
+            const result = await this.request("/api/undo", {});
+            if (result && result.ok && result.data.undone) {
+                this.applyState(result.data, {});
                 this.sound.playMove();
+                this.announce(`Jugada deshecha. Puntuación: ${result.data.score}.`);
             }
-        } catch (err) {
-            console.error("Error al deshacer:", err);
         } finally {
-            this.isProcessing = false;
+            this.busy = false;
+        }
+    }
+
+    /** Pide confirmación si hay una partida en curso con puntos (BUG-13). */
+    requestReset() {
+        const inProgress = this.state && this.state.status === "playing" && this.state.score > 0;
+        if (inProgress) {
+            this.toggleModal("confirm", true);
+        } else {
+            this.reset();
         }
     }
 
     async reset() {
-        try {
-            const res = await fetch("/api/reset", JSON_POST);
-            if (res.ok) {
-                const data = await res.json();
-                this.modalWin.classList.add("hidden");
-                this.modalOver.classList.add("hidden");
-                this.previousGrid = null;
-                this.render(data);
-                this.sound.playMove();
-            }
-        } catch (err) {
-            console.error("Error al reiniciar:", err);
+        this.toggleModal("confirm", false);
+        const result = await this.request("/api/reset", {});
+        if (result && result.ok) {
+            this.applyState(result.data, { appear: true });
+            this.sound.playMove();
+            this.announce("Nueva partida iniciada.");
         }
     }
 
     async continuePlaying() {
-        try {
-            const res = await fetch("/api/continue", JSON_POST);
-            if (res.ok) {
-                const data = await res.json();
-                this.modalWin.classList.add("hidden");
-                this.render(data);
-            }
-        } catch (err) {
-            console.error("Error al continuar:", err);
+        const result = await this.request("/api/continue", {});
+        if (result && (result.ok || result.status === 409)) {
+            await this.loadState();
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Renderizado del Tablero y Animaciones
-    // -------------------------------------------------------------------------
+    // --- Dibujo del tablero ------------------------------------------------------
 
-    render(state) {
-        const { grid, score, highscore, won, game_over, can_undo } = state;
+    /**
+     * Actualiza toda la interfaz con un estado del servidor.
+     * @param {object} options move: datos de la jugada (animaciones de fusión y
+     *        ficha nueva); appear: anima la aparición de todas las fichas.
+     */
+    applyState(state, options) {
+        const firstLoad = this.state === null;
+        const previousStatus = firstLoad ? state.status : this.state.status;
+        if (state.size !== this.size) {
+            this.buildGrid(state.size);
+        }
+        this.state = state;
+        this.updateScores(state, options.move);
+        this.renderTiles(state, options);
+        this.updateDialogs(previousStatus, state, firstLoad);
+        this.el.undo.disabled = !state.can_undo;
+        this.el.goal.textContent = state.winning_tile;
+    }
 
-        // Actualizar marcadores
-        this.currentScoreEl.textContent = score.toLocaleString();
-        this.bestScoreEl.textContent = highscore.toLocaleString();
-        this.btnUndo.disabled = !can_undo;
+    /** Genera las celdas de fondo para un tablero de size x size. */
+    buildGrid(size) {
+        this.size = size;
+        this.el.board.style.setProperty("--size", size);
+        const cells = Array.from({ length: size * size }, () => {
+            const cell = document.createElement("div");
+            cell.className = "grid-cell";
+            return cell;
+        });
+        this.el.gridBackground.replaceChildren(...cells);
+    }
 
-        // Limpiar contenedor de fichas
-        this.tileContainer.innerHTML = "";
+    createTile(value, row, col) {
+        const tile = document.createElement("div");
+        tile.className = `tile ${tileClassName(value, this.state.winning_tile)} ${digitClass(value)}`;
+        tile.style.setProperty("--row", row);
+        tile.style.setProperty("--col", col);
+        const inner = document.createElement("div");
+        inner.className = "tile-inner";
+        inner.textContent = value;
+        tile.appendChild(inner);
+        return tile;
+    }
 
-        // Dibujar cada ficha en su posición de cuadrícula
-        for (let r = 0; r < 4; r++) {
-            for (let c = 0; c < 4; c++) {
-                const val = grid[r][c];
-                if (val > 0) {
-                    const tileEl = document.createElement("div");
-                    tileEl.textContent = val;
-
-                    // Clases de estilo según el valor
-                    let tileClass = val <= 2048 ? `tile-${val}` : "tile-super";
-                    tileEl.className = `tile ${tileClass}`;
-
-                    // Posicionamiento en el grid CSS
-                    tileEl.style.gridRowStart = r + 1;
-                    tileEl.style.gridColumnStart = c + 1;
-
-                    // Detectar si es una ficha recién aparecida o fusionada para la animación
-                    if (this.previousGrid) {
-                        const prevVal = this.previousGrid[r][c];
-                        if (prevVal === 0) {
-                            tileEl.classList.add("tile-new");
-                        } else if (prevVal < val) {
-                            tileEl.classList.add("tile-merged");
-                        }
-                    }
-
-                    this.tileContainer.appendChild(tileEl);
+    renderTiles(state, { move, appear }) {
+        const merged = new Set((move ? move.merged_cells : []).map(([r, c]) => `${r},${c}`));
+        const newTile = move && move.new_tile ? `${move.new_tile.row},${move.new_tile.col}` : null;
+        const tiles = [];
+        this.tileElements.clear();
+        state.grid.forEach((rowValues, row) => {
+            rowValues.forEach((value, col) => {
+                if (!value) {
+                    return;
                 }
+                const key = `${row},${col}`;
+                const tile = this.createTile(value, row, col);
+                if (appear || key === newTile) {
+                    tile.classList.add("tile-new");
+                } else if (merged.has(key)) {
+                    tile.classList.add("tile-merged");
+                }
+                this.tileElements.set(key, tile);
+                tiles.push(tile);
+            });
+        });
+        this.el.tiles.replaceChildren(...tiles);
+    }
+
+    /**
+     * Desliza cada ficha desde su celda de origen hasta su destino (BUG-12: antes
+     * no había deslizamiento y toda ficha movida "aparecía" como si fuera nueva).
+     */
+    animateSlide(tileMoves) {
+        if (!tileMoves || tileMoves.length === 0 || prefersReducedMotion()) {
+            return Promise.resolve();
+        }
+        tileMoves.forEach(({ from, to }) => {
+            const tile = this.tileElements.get(`${from[0]},${from[1]}`);
+            if (tile) {
+                tile.style.setProperty("--row", to[0]);
+                tile.style.setProperty("--col", to[1]);
             }
-        }
+        });
+        return new Promise((resolve) => setTimeout(resolve, SLIDE_DURATION_MS));
+    }
 
-        this.previousGrid = JSON.parse(JSON.stringify(grid));
-
-        // Manejar ventanas modales de estado
-        if (won) {
-            this.modalWin.classList.remove("hidden");
-            this.sound.playWin();
-        } else {
-            this.modalWin.classList.add("hidden");
-        }
-
-        if (game_over) {
-            this.finalScoreText.textContent = score.toLocaleString();
-            this.modalOver.classList.remove("hidden");
-            this.sound.playGameOver();
-        } else {
-            this.modalOver.classList.add("hidden");
+    updateScores(state, move) {
+        this.el.score.textContent = state.score.toLocaleString("es-CO");
+        this.el.best.textContent = state.highscore.toLocaleString("es-CO");
+        if (move && move.points > 0) {
+            this.showScoreBubble(move.points);
         }
     }
 
@@ -325,169 +381,182 @@ class GameClient {
         const bubble = document.createElement("span");
         bubble.className = "score-bubble";
         bubble.textContent = `+${points}`;
-        this.scoreBubbleContainer.appendChild(bubble);
-
-        setTimeout(() => {
-            bubble.remove();
-        }, 850);
+        this.el.bubbles.appendChild(bubble);
+        setTimeout(() => bubble.remove(), SCORE_BUBBLE_MS);
     }
 
-    // -------------------------------------------------------------------------
-    // Eventos de Entrada (Teclado, Táctil, Botones)
-    // -------------------------------------------------------------------------
+    playMoveSound(data) {
+        const mergedValue = highestMergedValue(data.grid, data.merged_cells);
+        if (mergedValue > 0) {
+            this.sound.playMerge(mergedValue);
+        } else {
+            this.sound.playMove();
+        }
+    }
 
-    setupEventListeners() {
-        // Atajos de teclado
-        window.addEventListener("keydown", (e) => {
-            // Evitar desplazamiento de página con teclas de flecha
-            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
-                e.preventDefault();
+    // --- Diálogos y anuncios -------------------------------------------------------
+
+    /** Muestra u oculta los diálogos de victoria y fin, y anuncia los cambios. */
+    updateDialogs(previousStatus, state, firstLoad) {
+        this.el.finalScore.textContent = state.score.toLocaleString("es-CO");
+        this.toggleModal("win", state.status === "won");
+        this.toggleModal("over", state.status === "game_over");
+        // BUG-14: sonido y anuncio solo al ENTRAR en el estado, nunca al recargar.
+        const transition = firstLoad ? null : statusTransition(previousStatus, state.status);
+        if (transition === "won") {
+            this.sound.playWin();
+            this.announce("¡Felicitaciones! Alcanzaste la ficha 2048.");
+        } else if (transition === "game_over") {
+            this.sound.playGameOver();
+            this.announce(`Fin de la partida. Puntuación final: ${state.score}.`);
+        }
+    }
+
+    openModalName() {
+        return Object.keys(this.modals).find((name) => !this.modals[name].classList.contains("hidden"));
+    }
+
+    toggleModal(name, open) {
+        const modal = this.modals[name];
+        const isOpen = !modal.classList.contains("hidden");
+        if (open === isOpen) {
+            return;
+        }
+        if (open) {
+            this.focusBeforeModal = document.activeElement;
+            modal.classList.remove("hidden");
+            modal.querySelector("button").focus();
+        } else {
+            modal.classList.add("hidden");
+            if (this.focusBeforeModal && document.contains(this.focusBeforeModal)) {
+                this.focusBeforeModal.focus();
             }
+        }
+    }
 
-            switch (e.key) {
-                case "ArrowLeft":
-                case "a":
-                case "A":
-                    this.sendMove("left");
-                    break;
-                case "ArrowRight":
-                case "d":
-                case "D":
-                    this.sendMove("right");
-                    break;
-                case "ArrowUp":
-                case "w":
-                case "W":
-                    this.sendMove("up");
-                    break;
-                case "ArrowDown":
-                case "s":
-                case "S":
-                    this.sendMove("down");
-                    break;
-                case "u":
-                case "U":
-                    this.undo();
-                    break;
-                case "r":
-                case "R":
-                    this.reset();
-                    break;
+    /** Escape cierra la confirmación y Tab no sale del diálogo abierto. */
+    handleModalKey(event, name) {
+        if (event.key === "Escape" && name === "confirm") {
+            this.toggleModal("confirm", false);
+            return;
+        }
+        if (event.key !== "Tab") {
+            return;
+        }
+        const buttons = Array.from(this.modals[name].querySelectorAll("button"));
+        const index = buttons.indexOf(document.activeElement);
+        const step = event.shiftKey ? -1 : 1;
+        event.preventDefault();
+        buttons[(index + step + buttons.length) % buttons.length].focus();
+    }
+
+    announce(message) {
+        this.el.announcer.textContent = message;
+    }
+
+    announceMove(direction, data) {
+        const points = data.points > 0 ? ` Ganaste ${data.points} puntos.` : "";
+        this.announce(`Movimiento ${DIRECTION_PHRASES[direction]}.${points} `
+            + `Puntuación: ${data.score}. Ficha mayor: ${data.max_tile}.`);
+    }
+
+    showToast(message) {
+        this.el.toast.textContent = message;
+        this.el.toast.classList.remove("hidden");
+    }
+
+    hideToast() {
+        this.el.toast.classList.add("hidden");
+    }
+
+    // --- Entradas: teclado, botones y gestos ------------------------------------
+
+    setupKeyboard() {
+        window.addEventListener("keydown", (event) => {
+            const modalName = this.openModalName();
+            if (modalName) {
+                this.handleModalKey(event, modalName);
+                return;
+            }
+            const action = actionForKey(event);
+            if (!action) {
+                return;
+            }
+            event.preventDefault(); // Las flechas no deben desplazar la página.
+            if (action.type === "move") {
+                this.move(action.direction);
+            } else if (action.type === "undo") {
+                this.undo();
+            } else if (action.type === "reset") {
+                this.requestReset();
             }
         });
+    }
 
-        // Botones de interfaz
-        this.btnUndo.addEventListener("click", () => this.undo());
-        this.btnRestart.addEventListener("click", () => this.reset());
-
-        document.getElementById("btn-continue").addEventListener("click", () => this.continuePlaying());
-        document.getElementById("btn-win-restart").addEventListener("click", () => this.reset());
-        document.getElementById("btn-over-restart").addEventListener("click", () => this.reset());
-        document.getElementById("btn-over-undo").addEventListener("click", () => {
-            this.modalOver.classList.add("hidden");
-            this.undo();
-        });
-
-        // Botones del D-Pad virtual en pantalla
-        document.querySelectorAll(".dpad-btn").forEach((btn) => {
-            btn.addEventListener("click", () => {
-                const dir = btn.getAttribute("data-dir");
-                if (dir) this.sendMove(dir);
-            });
-        });
-
-        // Alternar sonido
-        this.btnSound.addEventListener("click", () => {
+    setupButtons() {
+        const onClick = (id, handler) => document.getElementById(id).addEventListener("click", handler);
+        onClick("btn-undo", () => this.undo());
+        onClick("btn-restart", () => this.requestReset());
+        onClick("btn-continue", () => this.continuePlaying());
+        onClick("btn-win-restart", () => this.reset());
+        onClick("btn-over-restart", () => this.reset());
+        onClick("btn-over-undo", () => this.undo());
+        onClick("btn-confirm-restart", () => this.reset());
+        onClick("btn-cancel-restart", () => this.toggleModal("confirm", false));
+        onClick("btn-sound", () => {
             this.sound.toggle();
-            this.updateSoundIcon();
+            this.updateSoundButton();
         });
-
-        // Alternar tema claro / oscuro
-        this.btnTheme.addEventListener("click", () => {
-            this.toggleTheme();
+        onClick("btn-theme", () => {
+            const current = document.documentElement.getAttribute("data-theme");
+            const next = current === "dark" ? "light" : "dark";
+            preferences.set("2048_theme", next);
+            this.applyTheme(next);
+        });
+        document.querySelectorAll(".dpad-btn").forEach((button) => {
+            button.addEventListener("click", () => this.move(button.dataset.dir));
         });
     }
 
-    setupTouchGestures() {
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let touchEndX = 0;
-        let touchEndY = 0;
-
-        const threshold = 35; // Distancia mínima en píxeles para reconocer un deslizamiento
-
-        this.boardElement.addEventListener("touchstart", (e) => {
-            const touch = e.changedTouches[0];
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
+    setupTouch() {
+        let startX = 0;
+        let startY = 0;
+        this.el.board.addEventListener("touchstart", (event) => {
+            startX = event.changedTouches[0].clientX;
+            startY = event.changedTouches[0].clientY;
         }, { passive: true });
-
-        this.boardElement.addEventListener("touchend", (e) => {
-            const touch = e.changedTouches[0];
-            touchEndX = touch.clientX;
-            touchEndY = touch.clientY;
-
-            const deltaX = touchEndX - touchStartX;
-            const deltaY = touchEndY - touchStartY;
-
-            if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                // Desplazamiento horizontal
-                if (Math.abs(deltaX) > threshold) {
-                    this.sendMove(deltaX > 0 ? "right" : "left");
-                }
-            } else {
-                // Desplazamiento vertical
-                if (Math.abs(deltaY) > threshold) {
-                    this.sendMove(deltaY > 0 ? "down" : "up");
-                }
+        this.el.board.addEventListener("touchend", (event) => {
+            const touch = event.changedTouches[0];
+            const direction = swipeDirection(touch.clientX - startX, touch.clientY - startY,
+                SWIPE_THRESHOLD_PX);
+            if (direction) {
+                this.move(direction);
             }
         }, { passive: true });
     }
 
-    // -------------------------------------------------------------------------
-    // Preferencias y Temas
-    // -------------------------------------------------------------------------
+    // --- Preferencias visuales ------------------------------------------------------
 
-    updateSoundIcon() {
-        const iconOn = document.getElementById("icon-sound-on");
-        const iconOff = document.getElementById("icon-sound-off");
-        if (this.sound.enabled) {
-            iconOn.classList.remove("hidden");
-            iconOff.classList.add("hidden");
-        } else {
-            iconOn.classList.add("hidden");
-            iconOff.classList.remove("hidden");
-        }
+    savedTheme() {
+        const systemTheme = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        return preferences.get("2048_theme", systemTheme);
     }
 
-    applySavedTheme() {
-        const savedTheme = localStorage.getItem("2048_theme") || "dark";
-        document.documentElement.setAttribute("data-theme", savedTheme);
-        this.updateThemeIcon(savedTheme);
+    applyTheme(theme) {
+        const dark = theme === "dark";
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+        this.el.themeButton.setAttribute("aria-pressed", String(dark));
+        document.getElementById("icon-moon").classList.toggle("hidden", !dark);
+        document.getElementById("icon-sun").classList.toggle("hidden", dark);
     }
 
-    toggleTheme() {
-        const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
-        const newTheme = currentTheme === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-theme", newTheme);
-        localStorage.setItem("2048_theme", newTheme);
-        this.updateThemeIcon(newTheme);
-    }
-
-    updateThemeIcon(theme) {
-        const iconMoon = document.getElementById("icon-moon");
-        const iconSun = document.getElementById("icon-sun");
-        if (theme === "dark") {
-            iconMoon.classList.remove("hidden");
-            iconSun.classList.add("hidden");
-        } else {
-            iconMoon.classList.add("hidden");
-            iconSun.classList.remove("hidden");
-        }
+    updateSoundButton() {
+        const enabled = this.sound.enabled;
+        this.el.soundButton.setAttribute("aria-pressed", String(enabled));
+        document.getElementById("icon-sound-on").classList.toggle("hidden", !enabled);
+        document.getElementById("icon-sound-off").classList.toggle("hidden", enabled);
     }
 }
 
-// Iniciar aplicación cuando el DOM esté listo
-document.addEventListener("DOMContentLoaded", () => {
-    window.gameClient = new GameClient();
-});
+// Los scripts usan "defer": el DOM ya está listo cuando se ejecuta esta línea.
+window.gameClient = new GameClient();
