@@ -31,7 +31,7 @@ defecto menor o de presentación.
 | BUG-12 | static/app.js | Las animaciones comparaban la misma celda antes y después: toda ficha desplazada «aparecía» como nueva y no había deslizamiento. | Lógico (presentación) | Media |
 | BUG-13 | static/app.js | Ctrl+R (recargar) también activaba el atajo R y reiniciaba la partida, sin pedir confirmación. | Lógico (usabilidad) | Media |
 | BUG-14 | static/app.js | Los sonidos de victoria y de derrota se repetían en cada actualización mientras el estado se mantenía. | Lógico | Baja |
-| BUG-15 | static/index.html, style.css | Barreras de accesibilidad: zoom bloqueado, diálogos sin rol ni foco, sin anuncios para lectores de pantalla y 8 de 11 fichas con contraste menor que 3:1. | Usabilidad y accesibilidad | Media |
+| BUG-15 | static/index.html, style.css | Barreras de accesibilidad: zoom bloqueado, diálogos sin rol ni foco, sin anuncios para lectores de pantalla y 9 de 11 fichas con contraste menor que 3:1. | Usabilidad y accesibilidad | Media |
 | BUG-16 | static/app.js | Sin aviso al perder la conexión con el servidor (solo console.error) y localStorage podía lanzar excepciones. | Fiabilidad | Baja |
 | BUG-17 | main.py, logic.py, terminal_ui.py, web_ui.py | Deuda técnica: main.py importaba el módulo de pruebas; había cuatro importaciones o variables sin uso, cuatro f-strings sin variables, tres funciones nunca llamadas, move() con cuatro ramas duplicadas (complejidad 13) y números mágicos. | Mantenibilidad | Media |
 | BUG-18 | README.md, web_ui.py | Documentación desactualizada: enlaces absolutos a otro equipo (file:///home/miguelcastillo/...) y un docstring que mencionaba urllib.parse sin usarlo. | Documentación | Baja |
