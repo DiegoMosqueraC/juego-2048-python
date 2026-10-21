@@ -248,6 +248,10 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         for name, value in SECURITY_HEADERS.items():
             self.send_header(name, value)
+        if not urlsplit(self.path).path.startswith("/api/"):
+            # Obliga a revalidar los archivos estáticos: tras actualizar el juego
+            # el navegador no usa versiones viejas de app.js o style.css.
+            self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
     def log_message(self, message_format: str, *args) -> None:
