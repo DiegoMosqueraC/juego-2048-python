@@ -1,236 +1,323 @@
 """
-web_ui.py - Servidor Web Ligero en Python para 2048
-===================================================
-Proporciona una interfaz gráfica moderna accesible desde cualquier navegador web
-(Chrome, Firefox, Edge, etc.) sin requerir paquetes externos ni pip.
-Utiliza únicamente módulos de la biblioteca estándar de Python:
-- http.server
-- json
-- urllib.parse
+web_ui.py - Servidor web local para jugar 2048 en el navegador
+==============================================================
+Usa solo la biblioteca estándar de Python (http.server, json, urllib.parse).
+Sirve los archivos de la carpeta static/ y expone una API JSON:
 
-Expone una API REST para comunicar la interfaz web con la clase Game2048 en Python:
-  GET  /api/state     -> Obtiene el estado actual del juego.
-  POST /api/move      -> Ejecuta un movimiento ('left', 'right', 'up', 'down').
-  POST /api/undo      -> Deshace el último movimiento.
-  POST /api/reset     -> Reinicia la partida.
-  POST /api/continue  -> Continúa jugando tras alcanzar 2048.
+  GET  /api/state     -> Estado actual de la partida.
+  POST /api/move      -> {"direction": "left" | "right" | "up" | "down"}
+  POST /api/undo      -> Deshace la última jugada.
+  POST /api/reset     -> Inicia una partida nueva.
+  POST /api/continue  -> Sigue jugando tras alcanzar 2048 (409 si no aplica).
+
+Medidas de seguridad (el servidor solo escucha en 127.0.0.1):
+- Solo se aceptan nombres de host locales (protección ante DNS rebinding).
+- Los comandos exigen Content-Type application/json, lo que obliga a cualquier
+  otro sitio web a pasar por una verificación CORS que este servidor no autoriza.
+- El cuerpo se valida en tamaño, codificación, formato JSON y tipo.
+- Cabeceras de seguridad (CSP, nosniff, frame-ancestors) en todas las respuestas.
 """
 
 import json
+import logging
 import os
+import socketserver
 import sys
 import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from typing import Dict, Any
+from pathlib import Path
+from typing import Callable, Optional
 from urllib.parse import urlsplit
 
+from config import (
+    ALLOWED_HOSTNAMES,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    MAX_REQUEST_BODY_BYTES,
+    PORT_SEARCH_ATTEMPTS,
+)
 from logic import Game2048
+from validation import validate_port
 
-# Instancia global del juego gestionada por el servidor
-GAME_INSTANCE = Game2048()
+logger = logging.getLogger(__name__)
 
-# Ruta al directorio que contiene los archivos estáticos de la interfaz web
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-# Tamaño máximo aceptado para el cuerpo de una petición (BUG-02: evita DoS).
-MAX_BODY_BYTES = 1024
-# Nombres de host locales aceptados (BUG-03: protección ante DNS rebinding).
-ALLOWED_HOSTNAMES = ("127.0.0.1", "localhost", "[::1]")
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self'; "
+        "style-src 'self' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; img-src 'self' data:; "
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
+        "form-action 'none'"
+    ),
+}
 
 
-class BadRequestError(Exception):
-    """Error de validación de una petición HTTP, con su código de estado."""
+class RequestError(Exception):
+    """Petición rechazada; lleva el código HTTP que debe devolverse."""
 
     def __init__(self, status: int, message: str):
         super().__init__(message)
         self.status = status
 
 
-class Game2048HTTPHandler(SimpleHTTPRequestHandler):
+# -----------------------------------------------------------------------------
+# Validaciones puras (se prueban sin levantar el servidor)
+# -----------------------------------------------------------------------------
+
+def host_is_allowed(host_header: Optional[str]) -> bool:
+    """True si la cabecera Host apunta a este equipo (127.0.0.1, localhost o ::1)."""
+    if not host_header:
+        return True  # Clientes HTTP/1.0 sin Host: no hay nombre que suplantar.
+    host = host_header.strip().lower()
+    if host.startswith("["):
+        hostname = host.split("]", 1)[0] + "]"
+    else:
+        hostname = host.split(":", 1)[0]
+    return hostname in ALLOWED_HOSTNAMES
+
+
+def parse_json_body(raw_length: Optional[str], read: Callable[[int], bytes]) -> dict:
     """
-    Controlador HTTP personalizado para servir tanto los archivos estáticos
-    del frontend como la API REST del juego 2048.
+    Valida y decodifica el cuerpo de una petición.
+
+    :param raw_length: valor de la cabecera Content-Length (puede faltar).
+    :param read: función que lee n bytes del cuerpo (rfile.read en el servidor).
+    :raises RequestError: 400 si el cuerpo es inválido, 413 si es demasiado grande.
     """
+    try:
+        length = int(raw_length or 0)
+    except ValueError:
+        raise RequestError(400, "Content-Length inválido") from None
+    if length < 0:
+        raise RequestError(400, "Content-Length inválido")
+    if length > MAX_REQUEST_BODY_BYTES:
+        raise RequestError(413, "El cuerpo de la petición es demasiado grande")
+    if length == 0:
+        return {}
+    try:
+        data = json.loads(read(length).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise RequestError(400, "El cuerpo debe ser JSON válido en UTF-8") from None
+    if not isinstance(data, dict):
+        raise RequestError(400, "El cuerpo debe ser un objeto JSON")
+    return data
+
+
+# -----------------------------------------------------------------------------
+# Servidor y manejador de peticiones
+# -----------------------------------------------------------------------------
+
+class GameServer(HTTPServer):
+    """
+    Servidor HTTP que guarda la partida que atiende. La partida se inyecta, de
+    modo que las pruebas pueden usar una con tablero y azar controlados.
+    Atiende una petición a la vez, así el estado de la partida nunca se comparte
+    entre hilos.
+    """
+
+    # En Windows, SO_REUSEADDR permitiría a dos servidores usar el mismo puerto.
+    allow_reuse_address = os.name != "nt"
+
+    def __init__(self, address: tuple[str, int], game: Game2048):
+        self.game = game
+        super().__init__(address, GameRequestHandler)
+
+    def server_bind(self) -> None:
+        # HTTPServer resuelve el nombre del equipo con getfqdn(), lo que en algunas
+        # redes tarda segundos; para un servidor local basta con la dirección IP.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
+class GameRequestHandler(SimpleHTTPRequestHandler):
+    """Sirve los archivos estáticos y la API JSON del juego."""
+
+    server: GameServer
 
     def __init__(self, *args, **kwargs):
-        # Configuramos el directorio base para servir HTML, CSS y JS desde 'static/'
-        super().__init__(*args, directory=STATIC_DIR, **kwargs)
+        super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
-    def _send_json_response(self, data: Dict[str, Any], status: int = 200) -> None:
-        """Envía una respuesta JSON con las cabeceras HTTP correspondientes."""
+    @property
+    def game(self) -> Game2048:
+        return self.server.game
+
+    # --- Rutas -------------------------------------------------------------------
+
+    def do_GET(self) -> None:
+        path = self._checked_path()
+        if path is None:
+            return
+        if path == "/api/state":
+            self._send_json(self.game.to_dict())
+        elif path.startswith("/api/"):
+            self._send_json({"error": "Ruta no encontrada"}, status=404)
+        elif path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
+        else:
+            super().do_GET()
+
+    def do_HEAD(self) -> None:
+        if self._checked_path() is not None:
+            super().do_HEAD()
+
+    def do_POST(self) -> None:
+        path = self._checked_path()
+        if path is None:
+            return
+        actions = {
+            "/api/move": self._api_move,
+            "/api/undo": self._api_undo,
+            "/api/reset": self._api_reset,
+            "/api/continue": self._api_continue,
+        }
+        action = actions.get(path)
+        try:
+            if action is None:
+                raise RequestError(404, "Ruta no encontrada")
+            if not self.headers.get("Content-Type", "").startswith("application/json"):
+                raise RequestError(415, "Los comandos deben enviarse como JSON")
+            payload = parse_json_body(self.headers.get("Content-Length"),
+                                      self.rfile.read)
+            self._send_json(action(payload))
+        except RequestError as error:
+            if error.status == 413:
+                self.close_connection = True  # El cuerpo no leído queda descartado.
+            self._send_json({"error": str(error)}, status=error.status)
+
+    # --- Acciones de la API --------------------------------------------------------
+
+    def _api_move(self, payload: dict) -> dict:
+        try:
+            result = self.game.move(payload.get("direction"))
+        except ValueError as error:
+            raise RequestError(400, str(error)) from None
+        response = self.game.to_dict()
+        response.update(result.to_dict())
+        response["gained_points"] = result.points
+        return response
+
+    def _api_undo(self, payload: dict) -> dict:
+        undone = self.game.undo()
+        return {**self.game.to_dict(), "undone": undone}
+
+    def _api_reset(self, payload: dict) -> dict:
+        self.game.reset()
+        return self.game.to_dict()
+
+    def _api_continue(self, payload: dict) -> dict:
+        if not self.game.continue_playing():
+            raise RequestError(409, "No hay una victoria pendiente")
+        return self.game.to_dict()
+
+    # --- Utilidades ----------------------------------------------------------------
+
+    def _checked_path(self) -> Optional[str]:
+        """Ruta sin query string, o None (ya respondido 403) si el Host no es local."""
+        if not host_is_allowed(self.headers.get("Host")):
+            self._send_json({"error": "Host no permitido"}, status=403)
+            return None
+        return urlsplit(self.path).path
+
+    def _send_json(self, data: dict, status: int = 200) -> None:
         payload = json.dumps(data).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(payload)
 
-    def _host_is_allowed(self) -> bool:
-        """Acepta solo peticiones dirigidas a un nombre de host local (BUG-03)."""
-        host = self.headers.get("Host")
-        if host is None:
-            return True
-        hostname = host.rsplit(":", 1)[0] if not host.endswith("]") else host
-        return hostname in ALLOWED_HOSTNAMES
+    def end_headers(self) -> None:
+        for name, value in SECURITY_HEADERS.items():
+            self.send_header(name, value)
+        super().end_headers()
 
-    def _read_json_body(self) -> Dict[str, Any]:
-        """Lee y valida el cuerpo JSON de la petición (BUG-02)."""
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-        except ValueError:
-            raise BadRequestError(400, "Content-Length inválido")
-        if length < 0:
-            raise BadRequestError(400, "Content-Length inválido")
-        if length > MAX_BODY_BYTES:
-            self.close_connection = True
-            raise BadRequestError(413, "El cuerpo de la petición es demasiado grande")
-        if length == 0:
-            return {}
-        try:
-            data = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            raise BadRequestError(400, "El cuerpo debe ser JSON válido")
-        if not isinstance(data, dict):
-            raise BadRequestError(400, "El cuerpo debe ser un objeto JSON")
-        return data
-
-    def do_GET(self) -> None:
-        """Maneja peticiones GET. Atiende la API o sirve archivos estáticos."""
-        if not self._host_is_allowed():
-            self._send_json_response({"error": "Host no permitido"}, status=403)
+    def log_message(self, message_format: str, *args) -> None:
+        """Omite el registro de cada llamada a la API para no saturar la consola."""
+        if urlsplit(self.path).path.startswith("/api/"):
             return
-        self.path = urlsplit(self.path).path  # BUG-04: ignora la query string
-        if self.path == "/api/state":
-            # Retorna el estado actual del juego
-            self._send_json_response(GAME_INSTANCE.to_dict())
-            return
-
-        if self.path == "/favicon.ico":
-            self.send_response(204)
-            self.end_headers()
-            return
-
-        # Si se accede a la raíz, redirigir a index.html
-        if self.path == "/" or self.path == "":
-            self.path = "/index.html"
-
-        super().do_GET()
-
-    def do_POST(self) -> None:
-        """Maneja peticiones POST para los comandos de juego."""
-        if not self._host_is_allowed():
-            self._send_json_response({"error": "Host no permitido"}, status=403)
-            return
-        self.path = urlsplit(self.path).path
-        # BUG-03: exigir JSON obliga a los navegadores a una verificación CORS previa,
-        # que este servidor no autoriza; así otros sitios no pueden enviar comandos.
-        content_type = self.headers.get("Content-Type", "")
-        if not content_type.startswith("application/json"):
-            self._send_json_response({"error": "Se requiere application/json"}, 415)
-            return
-        try:
-            post_data = self._read_json_body()
-        except BadRequestError as error:
-            self._send_json_response({"error": str(error)}, status=error.status)
-            return
-
-        if self.path == "/api/move":
-            direction = post_data.get("direction", "")
-            try:
-                score_before = GAME_INSTANCE.score
-                moved = GAME_INSTANCE.move(direction)
-                gained_points = GAME_INSTANCE.score - score_before
-                resp = GAME_INSTANCE.to_dict()
-                resp["moved"] = moved
-                resp["gained_points"] = gained_points
-                self._send_json_response(resp)
-            except ValueError as e:
-                self._send_json_response({"error": str(e)}, status=400)
-            return
-
-        elif self.path == "/api/undo":
-            undone = GAME_INSTANCE.undo()
-            resp = GAME_INSTANCE.to_dict()
-            resp["undone"] = undone
-            self._send_json_response(resp)
-            return
-
-        elif self.path == "/api/reset":
-            GAME_INSTANCE.reset()
-            self._send_json_response(GAME_INSTANCE.to_dict())
-            return
-
-        elif self.path == "/api/continue":
-            GAME_INSTANCE.continue_playing()
-            self._send_json_response(GAME_INSTANCE.to_dict())
-            return
-
-        # Ruta no encontrada
-        self.send_error(404, "Endpoint no encontrado")
-
-    def log_message(self, format, *args):
-        """Silenciar logs excesivos en la consola para una salida limpia."""
-        if not args:
-            return
-        first_arg = str(args[0])
-        if "GET /api/" in first_arg or "POST /api/" in first_arg:
-            return
-        super().log_message(format, *args)
+        super().log_message(message_format, *args)
 
 
-def run_server(port: int = 8080, open_browser: bool = True) -> None:
+# -----------------------------------------------------------------------------
+# Arranque
+# -----------------------------------------------------------------------------
+
+def create_server(
+    game: Optional[Game2048] = None,
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_PORT,
+    attempts: int = PORT_SEARCH_ATTEMPTS,
+) -> GameServer:
     """
-    Inicia el servidor web en el puerto especificado.
-    
-    :param port: Puerto de red para escuchar conexiones.
-    :param open_browser: Si es True, abre automáticamente el navegador predeterminado.
+    Crea el servidor en el primer puerto libre a partir de `port`.
+    Con port=0 el sistema operativo asigna uno libre (útil en las pruebas).
+
+    :raises OSError: si ninguno de los puertos intentados está disponible.
     """
-    server_address = ("127.0.0.1", port)
-    
-    # Intentar asignar el puerto o buscar el siguiente disponible si está ocupado
-    for p in range(port, port + 20):
+    game = game if game is not None else Game2048()
+    last_error: Optional[OSError] = None
+    candidate_ports = [0] if port == 0 else range(port, port + attempts)
+    for candidate in candidate_ports:
         try:
-            httpd = HTTPServer(("127.0.0.1", p), Game2048HTTPHandler)
-            actual_port = p
-            break
-        except OSError:
-            continue
-    else:
-        print("Error: No se pudo enlazar ningún puerto disponible.")
+            return GameServer((host, candidate), game)
+        except OSError as error:
+            last_error = error
+    raise OSError(
+        f"No hay puertos libres entre {port} y {port + attempts - 1}"
+    ) from last_error
+
+
+def _open_browser_quietly(url: str) -> None:
+    """Abre el navegador ocultando avisos de bajo nivel de algunos sistemas."""
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        saved_stderr = os.dup(2)
+        os.dup2(devnull, 2)
+        try:
+            webbrowser.open(url)
+        finally:
+            os.dup2(saved_stderr, 2)
+            os.close(saved_stderr)
+            os.close(devnull)
+    except (OSError, webbrowser.Error) as error:
+        logger.info("No se pudo abrir el navegador automáticamente: %s", error)
+
+
+def run_server(
+    port: int = DEFAULT_PORT,
+    open_browser: bool = True,
+    game: Optional[Game2048] = None,
+) -> None:
+    """Inicia el servidor y atiende peticiones hasta que se presione Ctrl + C."""
+    try:
+        server = create_server(game, port=port)
+    except OSError as error:
+        print(f"Error: {error}")
         sys.exit(1)
 
-    url = f"http://127.0.0.1:{actual_port}"
-    print(f"\n=======================================================")
-    print(f"  🎮 Servidor de 2048 iniciado con éxito")
-    print(f"  👉 Abre tu navegador en: {url}")
-    print(f"  Presiona Ctrl + C en esta terminal para detener el servidor")
-    print(f"=======================================================\n")
+    host, actual_port = server.server_address[:2]
+    url = f"http://{host}:{actual_port}"
+    print("\n" + "=" * 55)
+    print("  Servidor de 2048 iniciado")
+    print(f"  Abre tu navegador en: {url}")
+    print("  Presiona Ctrl + C en esta terminal para detenerlo")
+    print("=" * 55 + "\n")
 
     if open_browser:
-        try:
-            # Redirigir temporalmente stderr de bajo nivel para evitar mensajes de advertencia de sandbox del sistema
-            devnull = os.open(os.devnull, os.O_WRONLY)
-            old_stderr = os.dup(2)
-            os.dup2(devnull, 2)
-            try:
-                webbrowser.open(url)
-            finally:
-                os.dup2(old_stderr, 2)
-                os.close(old_stderr)
-                os.close(devnull)
-        except Exception:
-            pass
-
+        _open_browser_quietly(url)
     try:
-        httpd.serve_forever()
+        server.serve_forever()
     except KeyboardInterrupt:
         print("\nServidor web detenido. ¡Hasta pronto!")
-        httpd.server_close()
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":
-    port_arg = 8080
-    if len(sys.argv) > 1 and sys.argv[1].isdigit():
-        port_arg = int(sys.argv[1])
-    run_server(port=port_arg, open_browser=True)
+    run_server(port=validate_port(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_PORT)
