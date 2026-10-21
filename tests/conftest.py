@@ -33,13 +33,11 @@ def make_game(storage):
     """
 
     def factory(grid=None, score=0, size=DEFAULT_BOARD_SIZE, rng=None):
-        board_size = len(grid) if grid is not None else size
-        game = Game2048(size=board_size, storage=storage,
-                        rng=rng if rng is not None else random.Random(2048))
-        if grid is not None:
-            game.grid = [list(row) for row in grid]
-            game.score = score
-        return game
+        rng = rng if rng is not None else random.Random(2048)
+        if grid is None:
+            return Game2048(size=size, storage=storage, rng=rng)
+        rows = [list(row) for row in grid]
+        return Game2048.from_grid(rows, score=score, storage=storage, rng=rng)
 
     return factory
 

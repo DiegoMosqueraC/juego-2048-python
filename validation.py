@@ -51,6 +51,30 @@ def validate_board_size(value: object) -> int:
     return value
 
 
+def is_valid_tile(value: object) -> bool:
+    """True para 0 (celda vacía) o una potencia de 2 mayor o igual que 2."""
+    if not is_strict_int(value):
+        return False
+    # Una potencia de 2 tiene un único bit encendido: n & (n - 1) lo apaga.
+    return value == 0 or (value >= 2 and (value & (value - 1)) == 0)
+
+
+def validate_grid(value: object) -> list[list[int]]:
+    """
+    Verifica que un tablero sea una lista cuadrada de filas con fichas válidas.
+
+    :return: una copia del tablero, para que el llamador no comparta la lista.
+    """
+    if not isinstance(value, list) or not all(isinstance(row, list) for row in value):
+        raise ValueError("El tablero debe ser una lista de filas")
+    size = validate_board_size(len(value))
+    if any(len(row) != size for row in value):
+        raise ValueError("El tablero debe ser cuadrado")
+    if not all(is_valid_tile(cell) for row in value for cell in row):
+        raise ValueError("Las fichas deben ser 0 o potencias de 2 mayores que 1")
+    return [row[:] for row in value]
+
+
 def validate_score(value: object) -> int:
     """Verifica que una puntuación sea un entero no negativo."""
     if not is_strict_int(value) or value < 0:

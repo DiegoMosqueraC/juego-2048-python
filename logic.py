@@ -30,7 +30,12 @@ from config import (
     WINNING_TILE,
 )
 from storage import HighscoreStorage, JsonHighscoreStorage
-from validation import normalize_direction, validate_board_size
+from validation import (
+    normalize_direction,
+    validate_board_size,
+    validate_grid,
+    validate_score,
+)
 
 Cell = tuple[int, int]
 Grid = list[list[int]]
@@ -170,6 +175,38 @@ class Game2048:
         :param rng: generador aleatorio; inyectarlo con semilla hace las pruebas
                     repetibles.
         """
+        self._setup(size, storage, rng)
+        self.reset()
+
+    @classmethod
+    def from_grid(
+        cls,
+        grid: Grid,
+        score: int = 0,
+        storage: Optional[HighscoreStorage] = None,
+        rng: Optional[random.Random] = None,
+    ) -> "Game2048":
+        """
+        Crea una partida a partir de un tablero dado, sin fichas aleatorias
+        iniciales (útil para pruebas, demostraciones o partidas guardadas).
+
+        :raises ValueError: si el tablero o la puntuación no son válidos.
+        """
+        board = validate_grid(grid)
+        game = cls.__new__(cls)
+        game._setup(len(board), storage, rng)
+        game.grid = board
+        game.score = validate_score(score)
+        game.game_over = not game.can_move()
+        return game
+
+    def _setup(
+        self,
+        size: int,
+        storage: Optional[HighscoreStorage],
+        rng: Optional[random.Random],
+    ) -> None:
+        """Inicializa los atributos comunes a __init__ y from_grid."""
         self.size: int = validate_board_size(size)
         self._storage = storage if storage is not None else JsonHighscoreStorage()
         # El azar del juego no protege ningún secreto: no requiere un generador
@@ -183,7 +220,6 @@ class Game2048:
         self.game_over: bool = False
         # Cada elemento guarda (tablero, puntuación) previos a una jugada.
         self._history: deque = deque(maxlen=MAX_UNDO_HISTORY)
-        self.reset()
 
     # --- Estado derivado ---------------------------------------------------------
 
