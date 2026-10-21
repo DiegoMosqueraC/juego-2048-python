@@ -23,13 +23,15 @@ jobs:
 
     steps:
       - name: Obtener el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Instalar Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          # El proyecto no tiene requirements.txt: la caché se calcula con este archivo.
           cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Instalar dependencias de desarrollo
         run: python -m pip install -r requirements-dev.txt
@@ -44,7 +46,7 @@ jobs:
         run: pytest --cov --cov-report=term-missing --cov-report=xml --cov-fail-under=90
 
       - name: Instalar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -53,7 +55,7 @@ jobs:
 
       - name: Publicar el reporte de cobertura
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: reporte-cobertura
           path: coverage.xml
