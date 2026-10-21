@@ -78,7 +78,8 @@ def test_bug03_api_does_not_allow_any_origin(api_server):
 def test_bug03_post_without_json_content_type_is_rejected(api_server):
     """Un formulario de otro sitio (text/plain) no debe poder reiniciar la partida."""
     status, _, _ = send_request(
-        api_server, "POST", "/api/reset", body=b"", headers={"Content-Type": "text/plain"}
+        api_server, "POST", "/api/reset", body=b"",
+        headers={"Content-Type": "text/plain"},
     )
     assert status == 415
 
@@ -156,7 +157,9 @@ def test_bug08_record_file_does_not_depend_on_working_directory(tmp_path, monkey
     "stored_value, expected",
     [(-50, 0), (12.7, 0), ("abc", 0), (True, 0), (None, 0), (3132, 3132)],
 )
-def test_bug09_stored_record_is_validated(tmp_path, monkeypatch, stored_value, expected):
+def test_bug09_stored_record_is_validated(
+    tmp_path, monkeypatch, stored_value, expected
+):
     monkeypatch.setenv("JUEGO2048_DATA_DIR", str(tmp_path))
     monkeypatch.chdir(tmp_path)
     (tmp_path / "highscore.json").write_text(
@@ -177,3 +180,18 @@ def test_bug10_terminal_module_loads_without_curses(monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.CURSES_AVAILABLE is False
+
+
+# -----------------------------------------------------------------------------
+# BUG-11: los mensajes más anchos que la terminal no se mostraban
+# -----------------------------------------------------------------------------
+
+@pytest.mark.parametrize("width", [30, 45, 80])
+def test_bug11_terminal_messages_fit_the_window_width(make_game, width):
+    import terminal_ui
+
+    game = make_game(grid=[[1024, 1024, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW])
+    game.move("left")  # victoria pendiente: el mensaje más largo del juego
+    lines = terminal_ui.footer_lines(game, width)
+    assert all(len(line) <= width for line in lines)
+    assert "2048" in " ".join(lines)  # el aviso de victoria no se pierde
