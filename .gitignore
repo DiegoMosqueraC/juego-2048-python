@@ -1,0 +1,16 @@
+# Archivos generados por Python
+__pycache__/
+*.py[cod]
+
+# Entornos virtuales
+.venv/
+venv/
+
+# Datos locales del jugador (récord); no forman parte del código fuente
+highscore.json
+
+# Reportes de herramientas de calidad
+.coverage
+htmlcov/
+coverage.xml
+.pytest_cache/

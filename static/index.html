@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2048 en Python - Edición Moderna</title>
+    <meta name="description" content="Recreación moderna del clásico juego 2048 desarrollada en Python con interfaz gráfica animada y efectos de sonido.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Encabezado con título y contadores de puntuación -->
+        <header class="header">
+            <div class="header-left">
+                <h1 class="logo-title">2048</h1>
+                <p class="subtitle">Desarrollado en <span>Python</span></p>
+            </div>
+            <div class="header-right">
+                <div class="score-card">
+                    <span class="score-label">PUNTUACIÓN</span>
+                    <span id="current-score" class="score-value">0</span>
+                    <div id="score-bubble-container" class="score-bubble-container"></div>
+                </div>
+                <div class="score-card best-card">
+                    <span class="score-label">RÉCORD</span>
+                    <span id="best-score" class="score-value">0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Barra de herramientas y controles -->
+        <div class="toolbar">
+            <div class="instructions-pill">
+                <span>¡Une los números para llegar a <strong>2048</strong>!</span>
+            </div>
+            <div class="action-buttons">
+                <button id="btn-undo" class="btn btn-secondary" title="Deshacer jugada (U)" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 7v6h6"></path>
+                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+                    </svg>
+                    <span>Deshacer</span>
+                </button>
+                <button id="btn-restart" class="btn btn-primary" title="Nueva Partida (R)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                    </svg>
+                    <span>Reiniciar</span>
+                </button>
+                <button id="btn-sound" class="btn btn-icon" title="Activar/Silenciar sonido" aria-label="Sonido">
+                    <svg id="icon-sound-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                    <svg id="icon-sound-off" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <line x1="23" y1="9" x2="17" y2="15"></line>
+                        <line x1="17" y1="9" x2="23" y2="15"></line>
+                    </svg>
+                </button>
+                <button id="btn-theme" class="btn btn-icon" title="Cambiar tema (Claro/Oscuro)" aria-label="Tema">
+                    <svg id="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="icon-sun" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Contenedor del Tablero del Juego -->
+        <main class="game-wrapper">
+            <div id="game-board" class="game-board" tabindex="0" role="region" aria-label="Tablero de 2048">
+                <!-- Celdas de fondo -->
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+                
+                <!-- Capa donde se posicionan dinámicamente las fichas -->
+                <div id="tile-container" class="tile-container"></div>
+            </div>
+
+            <!-- Modal Superpuesto: Victoria (2048) -->
+            <div id="modal-win" class="game-modal hidden">
+                <div class="modal-card">
+                    <div class="modal-badge win-badge">🎉 ¡VICTORIA! 🎉</div>
+                    <h2>¡Alcanzaste el 2048!</h2>
+                    <p>Has completado el objetivo del juego. ¿Deseas continuar para alcanzar una puntuación legendaria?</p>
+                    <div class="modal-actions">
+                        <button id="btn-continue" class="btn btn-primary">Seguir Jugando</button>
+                        <button id="btn-win-restart" class="btn btn-secondary">Nueva Partida</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Superpuesto: Fin de Partida (Game Over) -->
+            <div id="modal-over" class="game-modal hidden">
+                <div class="modal-card">
+                    <div class="modal-badge over-badge">GAME OVER</div>
+                    <h2>¡Sin movimientos posibles!</h2>
+                    <p>Tu puntuación final fue de <strong id="final-score-text">0</strong> puntos.</p>
+                    <div class="modal-actions">
+                        <button id="btn-over-restart" class="btn btn-primary">Intentar de Nuevo</button>
+                        <button id="btn-over-undo" class="btn btn-secondary">Deshacer Última Jugada</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Controles en pantalla para dispositivos táctiles o clics rápidos -->
+        <div class="virtual-dpad">
+            <button class="dpad-btn dpad-up" data-dir="up" aria-label="Arriba">▲</button>
+            <div class="dpad-middle-row">
+                <button class="dpad-btn dpad-left" data-dir="left" aria-label="Izquierda">◀</button>
+                <div class="dpad-center"></div>
+                <button class="dpad-btn dpad-right" data-dir="right" aria-label="Derecha">▶</button>
+            </div>
+            <button class="dpad-btn dpad-down" data-dir="down" aria-label="Abajo">▼</button>
+        </div>
+
+        <!-- Pie de página con atajos y créditos -->
+        <footer class="footer">
+            <p><strong>Controles:</strong> Usa las <strong>flechas del teclado</strong> o <strong>W, A, S, D</strong>. En móviles desliza el dedo en la pantalla.</p>
+            <p class="shortcuts-note">Atajos: <code>U</code> Deshacer | <code>R</code> Reiniciar</p>
+        </footer>
+    </div>
+
+    <!-- Script de lógica de interfaz y comunicación con Python -->
+    <script src="app.js"></script>
+</body>
+</html>
