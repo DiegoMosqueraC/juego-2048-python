@@ -38,29 +38,29 @@ ______________ coverage: platform win32, python 3.10.11-final-0 _______________
 
 Name             Stmts   Miss Branch BrPart  Cover   Missing
 ------------------------------------------------------------
-config.py           16      0      0      0   100%
-logic.py           197      0     36      0   100%
-main.py             60      1     12      1    97%   119
-storage.py          49      1      4      1    96%   89
-terminal_ui.py     161     13     46      4    91%   119-126, 185->exit, 205, 254, 275-276, 281
-validation.py       41      0     20      0   100%
-web_ui.py          181      4     48      3    97%   184, 306-307, 330->332, 341
+config.py           16      0      0      0 100.0%
+logic.py           197      0     36      0 100.0%
+main.py             60      1     12      1  97.2%   119
+storage.py          49      1      4      1  96.2%   89
+terminal_ui.py     161     13     46      4  90.8%   119-126, 185->exit, 205, 254, 275-276, 281
+validation.py       41      0     20      0 100.0%
+web_ui.py          181      4     48      3  96.9%   184, 306-307, 330->332, 341
 ------------------------------------------------------------
-TOTAL              705     19    166      9    97%
+TOTAL              705     19    166      9  96.6%
 Required test coverage of 90% reached. Total coverage: 96.56%
-============================= 273 passed in 7.34s =============================
+============================= 273 passed in 5.83s =============================
 
 === Pruebas de la interfaz (node:test) ===
-✔ actionForKey: flechas y WASD producen movimientos (3.2297ms)
-✔ actionForKey: U deshace y R reinicia (0.3184ms)
-✔ actionForKey: BUG-13, Ctrl/Cmd/Alt + tecla no activan atajos del juego (0.3297ms)
-✔ actionForKey: teclas sin función y eventos vacíos se ignoran (0.2387ms)
-✔ swipeDirection: gestos cortos no cuentan (valor límite) (0.3521ms)
-✔ swipeDirection: domina el eje con mayor desplazamiento (1.7072ms)
-✔ tileClassName: hasta la meta usa su color; mayores, el estilo especial (0.5552ms)
-✔ digitClass: clase según la cantidad de dígitos, con tope en 6 (0.569ms)
-✔ statusTransition: BUG-14, solo se anuncia al entrar en un estado (0.5108ms)
-✔ highestMergedValue: valor mayor entre las celdas fusionadas (0.8146ms)
+✔ actionForKey: flechas y WASD producen movimientos (1.7122ms)
+✔ actionForKey: U deshace y R reinicia (0.215ms)
+✔ actionForKey: BUG-13, Ctrl/Cmd/Alt + tecla no activan atajos del juego (0.2222ms)
+✔ actionForKey: teclas sin función y eventos vacíos se ignoran (0.134ms)
+✔ swipeDirection: gestos cortos no cuentan (valor límite) (0.3081ms)
+✔ swipeDirection: domina el eje con mayor desplazamiento (1.2883ms)
+✔ tileClassName: hasta la meta usa su color; mayores, el estilo especial (0.3577ms)
+✔ digitClass: clase según la cantidad de dígitos, con tope en 6 (0.2956ms)
+✔ statusTransition: BUG-14, solo se anuncia al entrar en un estado (0.201ms)
+✔ highestMergedValue: valor mayor entre las celdas fusionadas (0.53ms)
 ℹ tests 10
 ℹ suites 0
 ℹ pass 10
@@ -68,6 +68,6 @@ Required test coverage of 90% reached. Total coverage: 96.56%
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 190.1861
+ℹ duration_ms 128.517
 
 Todos los pasos del pipeline terminaron correctamente.

@@ -102,7 +102,7 @@ bandit -r . -x ./tests,./docs           # análisis de seguridad
 | Hallazgos de bandit | 4 | 0 |
 | Complejidad ciclomática de `move()` | 13 | 3 |
 | Pruebas automatizadas | 12 | 283 (273 Python + 10 JavaScript) |
-| Cobertura de sentencias y ramas | 40 % | 97 % |
+| Cobertura de sentencias y ramas | 40 % | 96,6 % |
 
 El flujo [`.github/workflows/ci.yml`](.github/workflows/ci.yml) ejecuta los mismos
 pasos en Ubuntu y Windows con Python 3.10 y 3.12 en cada *push* o *pull request*.

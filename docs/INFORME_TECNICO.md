@@ -14,8 +14,8 @@ integración continua.
 | Complejidad ciclomática de move() | 13 | 3 |
 | Funciones con complejidad mayor o igual que 10 | 5 | 0 |
 | Pruebas automatizadas | 12 | 283 (273 Python + 10 JavaScript) |
-| Cobertura de sentencias y ramas | 40 % | 97 % |
-| Cobertura de web_ui.py y terminal_ui.py | 0 % y 0 % | 97 % y 91 % |
+| Cobertura de sentencias y ramas | 40 % | 96,6 % |
+| Cobertura de web_ui.py y terminal_ui.py | 0 % y 0 % | 96,9 % y 90,8 % |
 | Fichas con contraste menor que 3:1 | 8 de 11 | 0 de 11 |
 | Fallos registrados y corregidos | — | 23 de 23 |
 
