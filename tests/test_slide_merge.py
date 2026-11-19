@@ -72,3 +72,9 @@ def test_input_line_is_not_modified():
 def test_result_keeps_the_length_of_the_line():
     for size in range(2, 9):
         assert len(slide_and_merge_line([2] * size).values) == size
+
+
+def test_fallo_provocado_para_validar_el_pipeline():
+    # Fallo provocado a propósito (taller de integración continua): espera que
+    # [2, 2] no se fusione. Se revierte en el commit siguiente.
+    assert slide_and_merge_line([2, 2, 0, 0]).values == (2, 2, 0, 0)
