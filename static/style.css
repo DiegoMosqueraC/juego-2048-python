@@ -592,6 +592,56 @@ kbd {
     gap: 4px;
 }
 
+.exp-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-small {
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+}
+
+.daily-badge {
+    margin-left: 6px;
+    padding: 1px 8px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #1f1a10;
+    background: var(--gold);
+    border-radius: var(--radius-full);
+}
+
+.exp-logbook {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 4px 10px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.exp-logbook .icon {
+    width: 15px;
+    height: 15px;
+}
+
+.exp-logbook strong {
+    color: var(--text-primary);
+}
+
+.exp-logbook .locked {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--legend);
+}
+
 .exp-event {
     padding: 7px 10px;
     text-align: center;

@@ -6,6 +6,14 @@ identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLO
 
 ## [2.4.0] - 2026-11-25
 
+### Agregado (mantenimiento perfectivo)
+- Reto del día: expedición con la semilla de la fecha (`POST /api/reset` con
+  `{"daily": true}`).
+- Bitácora entre partidas (`progress.json`): expediciones, victorias, mejor piso y
+  mejor puntuación; las cartas legendarias se desbloquean al llegar al piso 4.
+- Cartas Reloj de arena, Pico de oro y Mecha larga, y la maldición Inflación.
+- Las pruebas usan una carpeta temporal de datos y nunca tocan los archivos del jugador.
+
 ### Cambiado
 - La interfaz cabe en pantalla: en computador, panel a la izquierda y tablero a la
   derecha del alto de la ventana; en celular, el tablero va justo después de los

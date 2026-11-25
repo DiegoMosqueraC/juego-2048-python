@@ -320,22 +320,24 @@ class GameClient {
     }
 
     /** Pide confirmación si hay una partida en curso con puntos (BUG-13). */
-    requestReset() {
+    requestReset(daily = false) {
+        this.pendingDaily = daily;
         const inProgress = this.state && this.state.status === "playing" && this.state.score > 0;
         if (inProgress) {
             this.toggleModal("confirm", true);
         } else {
-            this.reset();
+            this.reset(daily);
         }
     }
 
-    async reset() {
+    async reset(daily = false) {
         this.toggleModal("confirm", false);
-        const result = await this.request("/api/reset", {});
+        const result = await this.request("/api/reset", daily ? { daily: true } : {});
         if (result && result.ok) {
             this.applyState(result.data, { appear: true });
             this.sound.playMove();
-            this.announce("Nueva partida iniciada.");
+            this.announce(daily ? `Reto del día iniciado. Semilla ${result.data.expedition.seed}.`
+                : "Nueva partida iniciada.");
         }
     }
 
@@ -439,6 +441,8 @@ class GameClient {
         set("exp-undo", info.undo_charges);
         set("exp-multiplier", `×${number(info.multiplier)}`);
         set("exp-seed", info.seed);
+        document.getElementById("exp-daily-badge").classList.toggle("hidden", !info.daily);
+        this.renderLogbook(info.progress);
         this.el.expeditionBar.classList.toggle("guardian", info.guardian);
 
         // Oro: cuenta hacia arriba y la moneda gira cuando sube.
@@ -477,6 +481,26 @@ class GameClient {
         this.el.undo.title = `Deshacer jugada (U): quedan ${info.undo_charges} usos`;
         this.showEvent(info.event);
         this.renderOffer(state);
+    }
+
+    /** Bitácora entre partidas y aviso de las legendarias bloqueadas. */
+    renderLogbook(progress) {
+        const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+        const part = (strong, text) => {
+            const span = el("span");
+            span.append(el("strong", "", strong), ` ${text}`);
+            return span;
+        };
+        const items = [icon("i-book"),
+            part(plural(progress.expeditions, "expedición", "expediciones"), ""),
+            part(plural(progress.wins, "victoria", "victorias"), ""),
+            part(`piso ${progress.best_floor}`, "es tu mejor marca")];
+        if (!progress.legends_unlocked) {
+            const locked = el("span", "locked");
+            locked.append(icon("i-lock"), `Legendarias al llegar al piso ${progress.unlock_floor}`);
+            items.push(locked);
+        }
+        document.getElementById("exp-logbook").replaceChildren(...items);
     }
 
     /** Aviso breve de un suceso (terremoto, fénix, escudo) con su efecto en el tablero. */
@@ -896,7 +920,8 @@ class GameClient {
         onClick("btn-win-restart", () => this.reset());
         onClick("btn-over-restart", () => this.reset());
         onClick("btn-over-undo", () => this.undo());
-        onClick("btn-confirm-restart", () => this.reset());
+        onClick("btn-confirm-restart", () => this.reset(this.pendingDaily));
+        onClick("btn-daily", () => this.requestReset(true));
         onClick("btn-cancel-restart", () => this.toggleModal("confirm", false));
         onClick("btn-sound", () => {
             this.sound.toggle();

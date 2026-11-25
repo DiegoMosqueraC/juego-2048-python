@@ -35,7 +35,12 @@ juega igual: las cartas, las maldiciones y la tienda cambian en cada una.
    el 3 ofrece solo cartas raras o legendarias. Desde el piso 4 ya no sale *Calma*.
 6. **La mina se ensancha.** Al llegar al piso de 1024 el tablero pasa a 5×5 y al de
    2048 a 6×6; la carta *Expansión* puede llevarlo hasta 7×7.
-7. **Deshacer** gasta usos: empiezas con uno. Si el tablero se bloquea o se acaban
+7. **Reto del día.** El botón *Reto del día* empieza la expedición con la semilla
+   de la fecha (por ejemplo 20261125): la misma para todos los que jueguen hoy.
+8. **Bitácora.** Se guardan entre partidas las expediciones jugadas, las victorias,
+   el mejor piso y la mejor puntuación (`progress.json`, junto al récord). Las cartas
+   legendarias se desbloquean la primera vez que llegas al piso 4.
+9. **Deshacer** gasta usos: empiezas con uno. Si el tablero se bloquea o se acaban
    las jugadas de *Prisa*, la expedición termina.
 
 | Carta | Rareza (precio) | Efecto |
@@ -46,9 +51,12 @@ juega igual: las cartas, las maldiciones y la tienda cambian en cada una.
 | Trébol | Común (4) | Más fichas nuevas de 4 (hasta 50 %). |
 | Bolsa de oro | Común (4) | Ganas 5 de oro. |
 | Dinamita | Común (4) | Destruye todas las piedras (solo aparece si hay piedras). |
+| Reloj de arena | Común (4) | *Prisa* te da un 50 % más de jugadas. |
 | Escudo | Rara (7) | Anula las maldiciones del próximo piso. |
 | Alquimia | Rara (7) | Convierte todas las fichas de 4 en 8. |
 | Interés | Rara (7) | Al superar un piso, 1 de oro por cada 5 guardados (máx. 5). |
+| Pico de oro | Rara (7) | Cada fusión que forma 128 o más da 1 de oro. |
+| Mecha larga | Rara (7) | Una jugada sin fusión baja la racha en 1 en vez de apagarla. |
 | Expansión | Legendaria (12) | El tablero crece una fila y una columna (máx. 7×7). |
 | Fénix | Legendaria (12) | Si te quedas sin jugadas, borra los 2 y los 4 y sigues (una vez). |
 
@@ -63,6 +71,7 @@ Las comunes salen 6 veces más que las legendarias y las raras 3 veces más.
 | Sequía | Las fusiones dan la mitad de puntos. |
 | Niebla | Las fichas de 2 y 4 no muestran su número. |
 | Terremoto | Cada 8 jugadas el tablero se mueve solo hacia un lado al azar. |
+| Inflación | En la tienda de ese piso todo cuesta un 50 % más. |
 
 La semilla aparece en pantalla; con `--semilla N` se repite la misma expedición.
 Las reglas están en [`roguelike.py`](roguelike.py).
@@ -136,7 +145,7 @@ static/ (index.html, style.css, app.js, game-utils.js)
 | `GET /api/state` | — | Estado de la partida |
 | `POST /api/move` | `{"direction": "left"}` | Estado + `moved`, `points`, `tile_moves`, `merged_cells`, `new_tile` |
 | `POST /api/undo` | `{}` | Estado + `undone` |
-| `POST /api/reset` | `{}` | Estado de la partida nueva |
+| `POST /api/reset` | `{}` o `{"daily": true}` | Partida nueva; con `daily` empieza el reto del día (`409` en el modo clásico) |
 | `POST /api/continue` | `{}` | Estado, o `409` si no hay una victoria pendiente |
 | `POST /api/mode` | `{"mode": "classic"}` o `{"mode": "expedition"}` | Estado de la partida de ese modo; `400` si el modo no existe |
 | `POST /api/choose` | `{"index": 0}` | Toma gratis esa carta y abre la tienda; `400` si el índice no es válido; `409` si no hay elección pendiente |
