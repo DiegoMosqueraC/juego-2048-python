@@ -96,11 +96,14 @@
         <section id="expedition-bar" class="expedition-bar hidden" aria-label="Estado de la expedición">
             <div class="exp-item"><span class="exp-label">PISO</span><strong id="exp-floor">1/6</strong></div>
             <div class="exp-item"><span class="exp-label">OBJETIVO</span><strong id="exp-target">64</strong></div>
-            <div class="exp-item exp-curse" id="exp-curse-box"><span class="exp-label">MALDICIÓN</span><strong id="exp-curse">Calma</strong></div>
-            <div class="exp-item hidden" id="exp-moves-box"><span class="exp-label">JUGADAS</span><strong id="exp-moves">0</strong></div>
-            <div class="exp-item"><span class="exp-label">DESHACER</span><strong id="exp-undo">1</strong></div>
+            <div class="exp-item"><span class="exp-label">ORO</span><strong id="exp-gold">0</strong></div>
+            <div class="exp-item"><span class="exp-label">RACHA</span><strong id="exp-streak">×1</strong></div>
             <div class="exp-item"><span class="exp-label">PUNTOS</span><strong id="exp-multiplier">×1</strong></div>
-            <p id="exp-curse-text" class="exp-curse-text"></p>
+            <div class="exp-item"><span class="exp-label">DESHACER</span><strong id="exp-undo">1</strong></div>
+            <div class="exp-item hidden" id="exp-moves-box"><span class="exp-label">JUGADAS</span><strong id="exp-moves">0</strong></div>
+            <p class="exp-curse-text" id="exp-curse-box"><strong id="exp-curse">Calma</strong>: <span id="exp-curse-text"></span></p>
+            <p id="exp-deck" class="exp-deck"></p>
+            <p id="exp-event" class="exp-event hidden" role="status"></p>
             <p class="exp-seed">Semilla <span id="exp-seed">0</span></p>
         </section>
 
@@ -141,9 +144,13 @@
             <div id="modal-choose" class="game-modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-title" aria-describedby="choose-text">
                 <div class="modal-card modal-card-wide">
                     <div class="modal-badge win-badge" id="choose-badge">PISO SUPERADO</div>
-                    <h2 id="choose-title">Elige una bendición</h2>
-                    <p id="choose-text">Solo puedes llevarte una. Atajos: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>.</p>
+                    <h2 id="choose-title">Elige una carta gratis</h2>
+                    <p id="choose-text">Solo puedes llevarte una.</p>
                     <div id="blessing-cards" class="blessing-cards"></div>
+                    <div id="shop-actions" class="modal-actions shop-actions hidden">
+                        <button id="btn-leave-shop" class="btn btn-primary">Bajar al siguiente piso</button>
+                        <button id="btn-reroll" class="btn btn-secondary">Renovar la oferta</button>
+                    </div>
                 </div>
             </div>
 
@@ -174,7 +181,7 @@
         <footer class="footer">
             <p id="controls-help"><strong>Controles:</strong> flechas del teclado o <strong>W, A, S, D</strong>. En el celular, desliza el dedo sobre el tablero.</p>
             <p class="shortcuts-note">Atajos: <kbd>U</kbd> deshacer · <kbd>R</kbd> reiniciar</p>
-            <p class="shortcuts-note expedition-help hidden">Expedición: llega a la ficha objetivo de cada piso, elige una bendición y sobrevive a las maldiciones hasta el 2048. Deshacer gasta usos.</p>
+            <p class="shortcuts-note expedition-help hidden">Expedición: llega a la ficha objetivo de cada piso. Los puntos se vuelven oro (1 por cada 100) para la tienda; fusionar en jugadas seguidas sube la racha. Los pisos 3 y 6 son guardianes con dos maldiciones. Teclas <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> para elegir o comprar cartas.</p>
         </footer>
     </div>
 

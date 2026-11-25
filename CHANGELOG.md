@@ -4,6 +4,23 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 proyecto usa [versionado semántico](https://semver.org/lang/es/). Los
 identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLOS.md).
 
+## [2.2.0] - 2026-11-25
+
+### Agregado (mantenimiento perfectivo)
+- Oro: los puntos de cada piso se convierten en oro (1 por cada 100).
+- Tienda al final de cada piso: comprar las cartas no elegidas o renovar la oferta
+  (`POST /api/shop`).
+- Racha: +10 % de puntos por cada jugada seguida con fusión (hasta ×2).
+- Rarezas de cartas (común, rara, legendaria) y 6 cartas nuevas: Bolsa de oro,
+  Escudo, Alquimia, Interés, Expansión (tablero de hasta 6×6) y Fénix.
+- 4 maldiciones nuevas: Derrumbe, Sequía, Niebla y Terremoto.
+- Pisos guardianes (3 y 6) con dos maldiciones; superar el 3 ofrece cartas raras.
+- Mazo, oro, racha, avisos de sucesos y resumen final en la interfaz web.
+
+### Cambiado
+- Elegir carta (`POST /api/choose`) ya no baja de piso: abre la tienda.
+- El estado de la expedición informa `curses` (lista) en lugar de `curse`.
+
 ## [2.1.0] - 2026-11-25
 
 ### Agregado (mantenimiento perfectivo)

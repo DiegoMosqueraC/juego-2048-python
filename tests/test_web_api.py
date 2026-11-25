@@ -175,7 +175,7 @@ def test_expedition_state_reports_the_floor(expedition_server):
     assert data["expedition"]["floor"] == 1
 
 
-def test_choose_applies_a_blessing_and_advances(expedition_server):
+def test_choose_takes_a_card_and_the_shop_leads_to_the_next_floor(expedition_server):
     expedition = expedition_server.game
     expedition.game.grid = [[32, 32, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
     _, _, moved = send_request(expedition_server, "POST", "/api/move",
@@ -184,7 +184,32 @@ def test_choose_applies_a_blessing_and_advances(expedition_server):
     status, _, data = send_request(expedition_server, "POST", "/api/choose",
                                    body={"index": 0})
     assert status == 200
+    assert data["status"] == "shop"
+    _, _, data = send_request(expedition_server, "POST", "/api/shop",
+                              body={"action": "leave"})
     assert data["expedition"]["floor"] == 2
+
+
+def test_shop_without_enough_gold_returns_409(expedition_server):
+    expedition = expedition_server.game
+    expedition._shop, expedition._shop_open = ["fenix"], True
+    status, _, data = send_request(expedition_server, "POST", "/api/shop",
+                                   body={"action": "buy", "index": 0})
+    assert status == 409
+    assert "oro" in data["error"]
+
+
+@pytest.mark.parametrize("body", [{"action": "steal"}, {"action": "buy", "index": 5}])
+def test_invalid_shop_request_returns_400(expedition_server, body):
+    expedition_server.game._shop, expedition_server.game._shop_open = ["bolsa"], True
+    status, _, _ = send_request(expedition_server, "POST", "/api/shop", body=body)
+    assert status == 400
+
+
+def test_shop_in_classic_mode_returns_409(api_server):
+    status, _, _ = send_request(api_server, "POST", "/api/shop",
+                                body={"action": "leave"})
+    assert status == 409
 
 
 def test_choose_with_an_invalid_index_returns_400(expedition_server):

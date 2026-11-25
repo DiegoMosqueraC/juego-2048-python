@@ -623,17 +623,37 @@ kbd {
     font-weight: 800;
 }
 
-.exp-curse.cursed strong,
-#exp-moves-box.low strong {
+.cursed #exp-curse,
+#exp-moves-box.low strong,
+.guardian #exp-floor {
     color: #f87171;
 }
 
-[data-theme="light"] .exp-curse.cursed strong,
-[data-theme="light"] #exp-moves-box.low strong {
+[data-theme="light"] .cursed #exp-curse,
+[data-theme="light"] #exp-moves-box.low strong,
+[data-theme="light"] .guardian #exp-floor {
     color: #b91c1c;
 }
 
+.exp-event {
+    grid-column: 1 / -1;
+    padding: 6px;
+    text-align: center;
+    font-weight: 800;
+    color: #1e293b;
+    background: #fbbf24;
+    border-radius: var(--radius-sm);
+}
+
+/* Niebla: las fichas de 2 y 4 no muestran su número. */
+.fog .tile-2 .tile-inner,
+.fog .tile-4 .tile-inner {
+    color: transparent;
+    filter: blur(1px);
+}
+
 .exp-curse-text,
+.exp-deck,
 .exp-seed {
     grid-column: 1 / -1;
     text-align: center;
@@ -671,10 +691,26 @@ kbd {
     transition: transform var(--transition-fast), border-color var(--transition-fast);
 }
 
-.blessing-card:hover,
+.blessing-card:hover:not(:disabled),
 .blessing-card:focus-visible {
     transform: translateY(-2px);
     border-color: var(--primary);
+}
+
+.blessing-card:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.rarity-rara { border-color: #38bdf8; }
+.rarity-legendaria { border-color: #f59e0b; }
+.rarity-rara .blessing-key { color: #38bdf8; }
+.rarity-legendaria .blessing-key { color: #fbbf24; }
+[data-theme="light"] .rarity-rara .blessing-key { color: #0369a1; }
+[data-theme="light"] .rarity-legendaria .blessing-key { color: #92400e; }
+
+.shop-actions {
+    margin-top: 12px;
 }
 
 .blessing-card .blessing-key {

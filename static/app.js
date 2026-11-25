@@ -23,6 +23,12 @@ const SWIPE_THRESHOLD_PX = 35;
 const SCORE_BUBBLE_MS = 850;
 // Debe coincidir con STONE en config.py: celda bloqueada del modo expedición.
 const STONE = -1;
+const EVENT_MS = 2600;
+const EVENT_TEXTS = {
+    terremoto: "¡Terremoto! El tablero se sacudió solo.",
+    fenix: "¡El Fénix te salvó! Se borraron los 2 y los 4.",
+    escudo: "El escudo anuló las maldiciones de este piso."
+};
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const CONNECTION_ERROR = "Sin conexión con el servidor de Python. "
     + "Verifica que la terminal del juego siga abierta.";
@@ -283,14 +289,35 @@ class GameClient {
         }
     }
 
-    /** Elige la bendición `index` (0 a 2) y pasa al siguiente piso. */
+    /** Toma gratis la carta `index` de la oferta y abre la tienda. */
     async choose(index) {
         const result = await this.request("/api/choose", { index });
         if (result && result.ok) {
             this.applyState(result.data, {});
-            const { floor, curse } = result.data.expedition;
+            this.sound.playMerge(64);
+            this.announce(`Carta tomada. Tienda abierta: tienes ${result.data.expedition.gold} de oro.`);
+        }
+    }
+
+    /** buy (comprar la carta `index`), reroll (renovar) o leave (bajar de piso). */
+    async shopAction(action, index) {
+        const result = await this.request("/api/shop", { action, index });
+        if (!result) {
+            return;
+        }
+        if (!result.ok) {
+            this.announce(result.data.error || "No se pudo completar la compra.");
+            return;
+        }
+        this.applyState(result.data, {});
+        const info = result.data.expedition;
+        if (action === "leave") {
             this.sound.playMove();
-            this.announce(`Piso ${floor}. Maldición: ${curse.name}. ${curse.description}`);
+            const curses = info.curses.map((curse) => `${curse.name}: ${curse.description}`).join(" ");
+            this.announce(`Piso ${info.floor}, objetivo ${info.target}. ${curses}`);
+        } else {
+            this.sound.playMerge(128);
+            this.announce(`Te quedan ${info.gold} de oro.`);
         }
     }
 
@@ -350,37 +377,89 @@ class GameClient {
             return;
         }
         const set = (id, text) => { document.getElementById(id).textContent = text; };
-        set("exp-floor", `${info.floor}/${info.floors}`);
+        const number = (value) => value.toLocaleString("es-CO");
+        set("exp-floor", `${info.floor}/${info.floors}${info.guardian ? " ☠" : ""}`);
         set("exp-target", info.target);
-        set("exp-curse", info.curse.name);
-        set("exp-curse-text", info.curse.description);
+        set("exp-gold", info.gold);
+        set("exp-streak", `×${number(info.streak_bonus)}`);
+        set("exp-curse", info.curses.map((curse) => curse.name).join(" + "));
+        set("exp-curse-text", info.curses.map((curse) => curse.description).join(" "));
         set("exp-undo", info.undo_charges);
-        set("exp-multiplier", `×${info.multiplier.toLocaleString("es-CO")}`);
+        set("exp-multiplier", `×${number(info.multiplier)}`);
         set("exp-seed", info.seed);
-        document.getElementById("exp-curse-box").classList.toggle("cursed", info.curse.id !== "calma");
+        set("exp-deck", info.deck.length === 0 ? "Mazo vacío: gana cartas al superar pisos."
+            : "Mazo: " + info.deck.map((card) => (card.count > 1 ? `${card.name} ×${card.count}` : card.name)).join(" · "));
+        this.el.expeditionBar.classList.toggle("guardian", info.guardian);
+        const cursed = info.curses.some((curse) => curse.id !== "calma");
+        document.getElementById("exp-curse-box").classList.toggle("cursed", cursed);
+        this.el.board.classList.toggle("fog", info.curses.some((curse) => curse.id === "niebla"));
+        this.showEvent(info.event);
         const movesBox = document.getElementById("exp-moves-box");
         movesBox.classList.toggle("hidden", info.moves_left === null);
         movesBox.classList.toggle("low", info.moves_left !== null && info.moves_left <= 10);
         set("exp-moves", info.moves_left === null ? "" : info.moves_left);
         this.el.undo.title = `Deshacer jugada (U) · quedan ${info.undo_charges} usos`;
-        this.renderBlessings(info.choices);
+        this.renderOffer(state);
     }
 
-    renderBlessings(choices) {
-        const cards = choices.map((choice, index) => {
+    /** Aviso breve de un suceso de la expedición (terremoto, fénix, escudo). */
+    showEvent(event) {
+        const banner = document.getElementById("exp-event");
+        clearTimeout(this.eventTimer);
+        banner.classList.toggle("hidden", !event);
+        if (event) {
+            banner.textContent = EVENT_TEXTS[event];
+            this.announce(EVENT_TEXTS[event]);
+            this.eventTimer = setTimeout(() => banner.classList.add("hidden"), EVENT_MS);
+        }
+    }
+
+    /** Cartas para elegir gratis o, después, la tienda con precios en oro. */
+    renderOffer(state) {
+        const info = state.expedition;
+        const shop = state.status === "shop";
+        const items = shop ? info.shop.items : info.choices;
+        const set = (id, text) => { document.getElementById(id).textContent = text; };
+        if (shop) {
+            set("choose-badge", "TIENDA");
+            set("choose-title", `Tienes ${info.gold} de oro`);
+            set("choose-text", items.length > 0
+                ? "Compra las cartas que no elegiste o renueva la oferta."
+                : "No quedan cartas: renueva la oferta o sigue bajando.");
+        } else {
+            const { gold, interest } = info.reward;
+            set("choose-badge", info.guardian ? "GUARDIÁN VENCIDO" : `PISO ${info.floor} SUPERADO`);
+            set("choose-title", "Elige una carta gratis");
+            set("choose-text", `Ganaste ${gold} de oro${interest ? ` y ${interest} de interés` : ""}. `
+                + "Las otras dos cartas quedarán en la tienda.");
+        }
+        const cards = items.map((item, index) => {
             const card = document.createElement("button");
-            card.className = "blessing-card";
-            [["blessing-key", `Tecla ${index + 1}`], ["blessing-name", choice.name],
-                ["blessing-text", choice.description]].forEach(([className, text]) => {
+            card.className = `blessing-card rarity-${item.rarity}`;
+            const label = shop ? `${index + 1} · ${item.rarity_name} · ${item.price} de oro`
+                : `${index + 1} · ${item.rarity_name} · gratis`;
+            [["blessing-key", label], ["blessing-name", item.name],
+                ["blessing-text", item.description]].forEach(([className, text]) => {
                 const span = document.createElement("span");
                 span.className = className;
                 span.textContent = text;
                 card.appendChild(span);
             });
-            card.addEventListener("click", () => this.choose(index));
+            card.disabled = shop && info.gold < item.price;
+            card.addEventListener("click", () => (shop ? this.shopAction("buy", index) : this.choose(index)));
             return card;
         });
         this.el.blessingCards.replaceChildren(...cards);
+        document.getElementById("shop-actions").classList.toggle("hidden", !shop);
+        const reroll = document.getElementById("btn-reroll");
+        reroll.textContent = `Renovar la oferta (${info.shop.reroll_price} de oro)`;
+        reroll.disabled = info.gold < info.shop.reroll_price;
+        set("btn-leave-shop", `Bajar al piso ${info.floor + 1}`);
+        // Al cambiar las cartas con el diálogo abierto, el foco no debe perderse.
+        const modal = this.modals.choose;
+        if (!modal.classList.contains("hidden") && !modal.contains(document.activeElement)) {
+            modal.querySelector("button:not(:disabled)").focus();
+        }
     }
 
     /** Genera las celdas de fondo para un tablero de size x size. */
@@ -489,13 +568,13 @@ class GameClient {
         }
         this.toggleModal("win", state.status === "won");
         this.toggleModal("over", state.status === "game_over");
-        this.toggleModal("choose", state.status === "choosing");
+        this.toggleModal("choose", state.status === "choosing" || state.status === "shop");
         // BUG-14: sonido y anuncio solo al ENTRAR en el estado, nunca al recargar.
         const transition = firstLoad ? null : statusTransition(previousStatus, state.status);
         if (transition === "choosing") {
             this.sound.playWin();
-            this.announce(`Piso ${state.expedition.floor} superado. `
-                + "Elige una bendición con las teclas 1, 2 o 3.");
+            this.announce(`Piso ${state.expedition.floor} superado. Ganaste `
+                + `${state.expedition.reward.gold} de oro. Elige una carta gratis con las teclas 1, 2 o 3.`);
         } else if (transition === "won") {
             this.sound.playWin();
             this.announce("¡Felicitaciones! Alcanzaste la ficha 2048.");
@@ -517,13 +596,13 @@ class GameClient {
             });
             return;
         }
-        set("choose-badge", `PISO ${info.floor} SUPERADO`);
+        const cards = info.deck.reduce((total, card) => total + card.count, 0);
+        const summary = `${state.score.toLocaleString("es-CO")} puntos, ${info.gold} de oro, `
+            + `racha máxima de ${info.best_streak} y ${cards} cartas. Semilla: ${info.seed}.`;
         set("win-title", "¡Expedición completada!");
-        set("win-text", `Superaste los ${info.floors} pisos y llegaste al 2048 `
-            + `con ${state.score.toLocaleString("es-CO")} puntos. Semilla: ${info.seed}.`);
+        set("win-text", `Superaste los ${info.floors} pisos y llegaste al 2048 con ${summary}`);
         set("over-title", info.moves_left === 0 ? "¡Se acabó el tiempo!" : "¡La expedición terminó!");
-        set("over-text", `Llegaste al piso ${info.floor} de ${info.floors} con `
-            + `${state.score.toLocaleString("es-CO")} puntos. Semilla: ${info.seed}.`);
+        set("over-text", `Llegaste al piso ${info.floor} de ${info.floors} con ${summary}`);
     }
 
     openModalName() {
@@ -551,9 +630,9 @@ class GameClient {
     /** Escape cierra la confirmación y Tab no sale del diálogo abierto. */
     handleModalKey(event, name) {
         if (name === "choose" && ["1", "2", "3"].includes(event.key)) {
-            const index = Number(event.key) - 1;
-            if (index < this.el.blessingCards.children.length) {
-                this.choose(index);
+            const card = this.el.blessingCards.children[Number(event.key) - 1];
+            if (card && !card.disabled) {
+                card.click();
             }
             return;
         }
@@ -634,6 +713,8 @@ class GameClient {
             preferences.set("2048_theme", next);
             this.applyTheme(next);
         });
+        onClick("btn-reroll", () => this.shopAction("reroll"));
+        onClick("btn-leave-shop", () => this.shopAction("leave"));
         document.querySelectorAll(".mode-btn").forEach((button) => {
             button.addEventListener("click", () => this.switchMode(button.dataset.mode));
         });
