@@ -317,6 +317,8 @@ def test_expansion_is_not_offered_at_the_maximum_size(expedition):
     while expedition.game.size < MAX_BOARD_EXPANSION:
         expedition.take_card("expansion")
     assert "expansion" not in expedition._draw_cards(len(CARDS), rare_only=True)
+    expedition.take_card("expansion")
+    assert expedition.game.size == MAX_BOARD_EXPANSION
 
 
 def test_card_phoenix_saves_the_expedition_once(expedition):
