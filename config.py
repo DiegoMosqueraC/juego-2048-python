@@ -19,6 +19,14 @@ STONE = -1
 # Jugadas que se pueden deshacer; limita el consumo de memoria del historial.
 MAX_UNDO_HISTORY = 20
 
+# --- Modo expedición (roguelike) --------------------------------------------
+# Ficha objetivo de cada piso; superar el último gana la expedición.
+EXPEDITION_TARGETS = (64, 128, 256, 512, 1024, 2048)
+STARTING_UNDO_CHARGES = 1
+# «Prisa» da objetivo ÷ 3 jugadas: alcanza con margen, pero obliga a no perder tiempo.
+HASTE_DIVISOR = 3
+MAX_PROBABILITY_OF_FOUR = 0.5
+
 # --- Direcciones admitidas ---------------------------------------------------
 DIRECTIONS = ("left", "right", "up", "down")
 # Alias en español aceptados por la API y la interfaz de terminal.
