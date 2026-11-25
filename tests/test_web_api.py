@@ -92,7 +92,7 @@ def test_unknown_api_routes_return_json_404(api_server, method, path):
 def test_static_files_and_security_headers(api_server):
     status, headers, body = send_request(api_server, "GET", "/")
     assert status == 200
-    assert "<title>2048 en Python</title>" in body
+    assert "<title>2048: La Mina</title>" in body
     assert "frame-ancestors 'none'" in headers["Content-Security-Policy"]
     assert headers["X-Content-Type-Options"] == "nosniff"
     assert headers["Cache-Control"] == "no-cache"
