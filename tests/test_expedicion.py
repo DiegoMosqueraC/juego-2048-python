@@ -256,3 +256,24 @@ def test_to_dict_reports_the_expedition(expedition):
     assert info["undo_charges"] == 1
     assert info["choices"] == []
     assert data["can_undo"] is False
+
+
+def test_a_move_that_changes_nothing_does_not_spend_haste(expedition):
+    expedition.apply_curse("prisa")
+    expedition.game.grid = [[2, 0, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    assert not expedition.move("left").moved
+    assert expedition.moves_left == expedition.target // 3
+
+
+def test_curse_stone_on_a_full_board_places_nothing(expedition):
+    full = [[2, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 4, 2]]
+    expedition.game.grid = [row[:] for row in full]
+    expedition.apply_curse("piedra")
+    assert expedition.game.grid == full
+
+
+def test_choosing_with_a_blocked_board_ends_the_expedition(expedition):
+    expedition._choices = ["deshacer", "codicia", "escoba"]
+    expedition.game.grid = [[2, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 4, 64]]
+    assert expedition.choose(0) is True
+    assert expedition.status == "game_over"

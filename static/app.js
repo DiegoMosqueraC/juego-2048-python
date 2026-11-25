@@ -21,6 +21,8 @@ const {
 const SLIDE_DURATION_MS = 110;
 const SWIPE_THRESHOLD_PX = 35;
 const SCORE_BUBBLE_MS = 850;
+// Debe coincidir con STONE en config.py: celda bloqueada del modo expedición.
+const STONE = -1;
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const CONNECTION_ERROR = "Sin conexión con el servidor de Python. "
     + "Verifica que la terminal del juego siga abierta.";
@@ -153,12 +155,15 @@ class GameClient {
             announcer: document.getElementById("announcer"),
             undo: document.getElementById("btn-undo"),
             soundButton: document.getElementById("btn-sound"),
-            themeButton: document.getElementById("btn-theme")
+            themeButton: document.getElementById("btn-theme"),
+            expeditionBar: document.getElementById("expedition-bar"),
+            blessingCards: document.getElementById("blessing-cards")
         };
         this.modals = {
             win: document.getElementById("modal-win"),
             over: document.getElementById("modal-over"),
-            confirm: document.getElementById("modal-confirm")
+            confirm: document.getElementById("modal-confirm"),
+            choose: document.getElementById("modal-choose")
         };
         this.state = null;
         this.size = 0;
@@ -275,6 +280,17 @@ class GameClient {
         }
     }
 
+    /** Elige la bendición `index` (0 a 2) y pasa al siguiente piso. */
+    async choose(index) {
+        const result = await this.request("/api/choose", { index });
+        if (result && result.ok) {
+            this.applyState(result.data, {});
+            const { floor, curse } = result.data.expedition;
+            this.sound.playMove();
+            this.announce(`Piso ${floor}. Maldición: ${curse.name}. ${curse.description}`);
+        }
+    }
+
     async continuePlaying() {
         const result = await this.request("/api/continue", {});
         if (result && (result.ok || result.status === 409)) {
@@ -298,9 +314,52 @@ class GameClient {
         this.state = state;
         this.updateScores(state, options.move);
         this.renderTiles(state, options);
+        this.updateExpedition(state);
         this.updateDialogs(previousStatus, state, firstLoad);
         this.el.undo.disabled = !state.can_undo;
-        this.el.goal.textContent = state.winning_tile;
+        this.el.goal.textContent = state.expedition ? state.expedition.target : state.winning_tile;
+    }
+
+    /** Muestra la barra del modo expedición (piso, maldición, recursos y semilla). */
+    updateExpedition(state) {
+        const info = state.expedition;
+        this.el.expeditionBar.classList.toggle("hidden", !info);
+        document.querySelector(".expedition-help").classList.toggle("hidden", !info);
+        if (!info) {
+            return;
+        }
+        const set = (id, text) => { document.getElementById(id).textContent = text; };
+        set("exp-floor", `${info.floor}/${info.floors}`);
+        set("exp-target", info.target);
+        set("exp-curse", info.curse.name);
+        set("exp-curse-text", info.curse.description);
+        set("exp-undo", info.undo_charges);
+        set("exp-multiplier", `×${info.multiplier.toLocaleString("es-CO")}`);
+        set("exp-seed", info.seed);
+        document.getElementById("exp-curse-box").classList.toggle("cursed", info.curse.id !== "calma");
+        const movesBox = document.getElementById("exp-moves-box");
+        movesBox.classList.toggle("hidden", info.moves_left === null);
+        movesBox.classList.toggle("low", info.moves_left !== null && info.moves_left <= 10);
+        set("exp-moves", info.moves_left === null ? "" : info.moves_left);
+        this.el.undo.title = `Deshacer jugada (U) · quedan ${info.undo_charges} usos`;
+        this.renderBlessings(info.choices);
+    }
+
+    renderBlessings(choices) {
+        const cards = choices.map((choice, index) => {
+            const card = document.createElement("button");
+            card.className = "blessing-card";
+            [["blessing-key", `Tecla ${index + 1}`], ["blessing-name", choice.name],
+                ["blessing-text", choice.description]].forEach(([className, text]) => {
+                const span = document.createElement("span");
+                span.className = className;
+                span.textContent = text;
+                card.appendChild(span);
+            });
+            card.addEventListener("click", () => this.choose(index));
+            return card;
+        });
+        this.el.blessingCards.replaceChildren(...cards);
     }
 
     /** Genera las celdas de fondo para un tablero de size x size. */
@@ -317,12 +376,14 @@ class GameClient {
 
     createTile(value, row, col) {
         const tile = document.createElement("div");
-        tile.className = `tile ${tileClassName(value, this.state.winning_tile)} ${digitClass(value)}`;
+        tile.className = value === STONE
+            ? "tile tile-stone"
+            : `tile ${tileClassName(value, this.state.winning_tile)} ${digitClass(value)}`;
         tile.style.setProperty("--row", row);
         tile.style.setProperty("--col", col);
         const inner = document.createElement("div");
         inner.className = "tile-inner";
-        inner.textContent = value;
+        inner.textContent = value === STONE ? "" : value;
         tile.appendChild(inner);
         return tile;
     }
@@ -401,17 +462,40 @@ class GameClient {
         this.el.finalScore.textContent = state.score.toLocaleString("es-CO");
         // Sin historial (p. ej., tras recargar la página) no hay jugada que deshacer.
         document.getElementById("btn-over-undo").disabled = !state.can_undo;
+        this.updateDialogTexts(state);
         this.toggleModal("win", state.status === "won");
         this.toggleModal("over", state.status === "game_over");
+        this.toggleModal("choose", state.status === "choosing");
         // BUG-14: sonido y anuncio solo al ENTRAR en el estado, nunca al recargar.
         const transition = firstLoad ? null : statusTransition(previousStatus, state.status);
-        if (transition === "won") {
+        if (transition === "choosing") {
+            this.sound.playWin();
+            this.announce(`Piso ${state.expedition.floor} superado. `
+                + "Elige una bendición con las teclas 1, 2 o 3.");
+        } else if (transition === "won") {
             this.sound.playWin();
             this.announce("¡Felicitaciones! Alcanzaste la ficha 2048.");
         } else if (transition === "game_over") {
             this.sound.playGameOver();
             this.announce(`Fin de la partida. Puntuación final: ${state.score}.`);
         }
+    }
+
+    /** En la expedición los diálogos de victoria y derrota cuentan otra historia. */
+    updateDialogTexts(state) {
+        const info = state.expedition;
+        const set = (id, text) => { document.getElementById(id).textContent = text; };
+        document.getElementById("btn-continue").classList.toggle("hidden", Boolean(info));
+        if (!info) {
+            return;
+        }
+        set("choose-badge", `PISO ${info.floor} SUPERADO`);
+        set("win-title", "¡Expedición completada!");
+        set("win-text", `Superaste los ${info.floors} pisos y llegaste al 2048 `
+            + `con ${state.score.toLocaleString("es-CO")} puntos. Semilla: ${info.seed}.`);
+        set("over-title", info.moves_left === 0 ? "¡Se acabó el tiempo!" : "¡La expedición terminó!");
+        set("over-text", `Llegaste al piso ${info.floor} de ${info.floors} con `
+            + `${state.score.toLocaleString("es-CO")} puntos. Semilla: ${info.seed}.`);
     }
 
     openModalName() {
@@ -438,6 +522,13 @@ class GameClient {
 
     /** Escape cierra la confirmación y Tab no sale del diálogo abierto. */
     handleModalKey(event, name) {
+        if (name === "choose" && ["1", "2", "3"].includes(event.key)) {
+            const index = Number(event.key) - 1;
+            if (index < this.el.blessingCards.children.length) {
+                this.choose(index);
+            }
+            return;
+        }
         if (event.key === "Escape" && name === "confirm") {
             this.toggleModal("confirm", false);
             return;
