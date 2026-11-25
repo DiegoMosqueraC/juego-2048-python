@@ -27,7 +27,9 @@ const EVENT_MS = 2600;
 const EVENT_TEXTS = {
     terremoto: "¡Terremoto! El tablero se sacudió solo.",
     fenix: "¡El Fénix te salvó! Se borraron los 2 y los 4.",
-    escudo: "El escudo anuló las maldiciones de este piso."
+    escudo: "El escudo anuló las maldiciones de este piso.",
+    crece: "¡La mina se ensancha! El tablero creció una fila y una columna.",
+    dinamita: "¡Bum! La piedra voló en pedazos."
 };
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const CONNECTION_ERROR = "Sin conexión con el servidor de Python. "
@@ -319,22 +321,24 @@ class GameClient {
     }
 
     /** Pide confirmación si hay una partida en curso con puntos (BUG-13). */
-    requestReset() {
+    requestReset(daily = false) {
+        this.pendingDaily = daily;
         const inProgress = this.state && this.state.status === "playing" && this.state.score > 0;
         if (inProgress) {
             this.toggleModal("confirm", true);
         } else {
-            this.reset();
+            this.reset(daily);
         }
     }
 
-    async reset() {
+    async reset(daily = false) {
         this.toggleModal("confirm", false);
-        const result = await this.request("/api/reset", {});
+        const result = await this.request("/api/reset", daily ? { daily: true } : {});
         if (result && result.ok) {
             this.applyState(result.data, { appear: true });
             this.sound.playMove();
-            this.announce("Nueva partida iniciada.");
+            this.announce(daily ? `Reto del día iniciado. Semilla ${result.data.expedition.seed}.`
+                : "Nueva partida iniciada.");
         }
     }
 
@@ -432,12 +436,21 @@ class GameClient {
         }
         const set = (id, text) => { document.getElementById(id).textContent = text; };
         const number = (value) => value.toLocaleString("es-CO");
-        set("exp-floor", `${info.floor}/${info.floors}`);
+        set("exp-floor", `${info.floor}/${info.endless ? "∞" : info.floors}`);
+        set("exp-dynamite", info.dynamite);
+        const dynamiteButton = document.getElementById("btn-dynamite");
+        dynamiteButton.disabled = info.dynamite === 0 || state.status !== "playing";
+        if (dynamiteButton.disabled) {
+            this.setAiming(false);
+        }
+        this.renderDanger(info);
         set("exp-target", info.target);
         set("exp-streak", `×${number(info.streak_bonus)}`);
         set("exp-undo", info.undo_charges);
         set("exp-multiplier", `×${number(info.multiplier)}`);
         set("exp-seed", info.seed);
+        document.getElementById("exp-daily-badge").classList.toggle("hidden", !info.daily);
+        this.renderLogbook(info.progress);
         this.el.expeditionBar.classList.toggle("guardian", info.guardian);
 
         // Oro: cuenta hacia arriba y la moneda gira cuando sube.
@@ -476,6 +489,96 @@ class GameClient {
         this.el.undo.title = `Deshacer jugada (U): quedan ${info.undo_charges} usos`;
         this.showEvent(info.event);
         this.renderOffer(state);
+    }
+
+    /** Medidor de peligro: una marca por piso, del verde al rojo. */
+    renderDanger(info) {
+        const pips = Math.max(info.floors, info.danger);
+        document.getElementById("exp-danger-pips").replaceChildren(
+            ...Array.from({ length: pips }, (_, i) => el("span", i < info.danger ? "on" : "")));
+        document.getElementById("exp-danger-value").textContent = info.danger;
+        const ratio = info.danger / info.floors;
+        const level = ratio > 1 ? "max" : ratio >= 0.8 ? "high" : ratio >= 0.5 ? "mid" : "low";
+        document.getElementById("exp-danger").dataset.level = level;
+    }
+
+    // --- Dinamita -------------------------------------------------------------------
+
+    /** Piedras del tablero en orden de lectura (fila por fila). */
+    stoneCells() {
+        const cells = [];
+        this.state.grid.forEach((row, r) => row.forEach((value, c) => {
+            if (value === STONE) {
+                cells.push([r, c]);
+            }
+        }));
+        return cells;
+    }
+
+    /** Con una piedra la vuela; con varias, pasa a apuntar con el ratón o Enter. */
+    useDynamite() {
+        const info = this.state && this.state.expedition;
+        if (!info || info.dynamite === 0 || this.state.status !== "playing") {
+            return;
+        }
+        const stones = this.stoneCells();
+        if (stones.length === 0) {
+            this.announce("No hay piedras que volar.");
+        } else if (stones.length === 1) {
+            this.blast(...stones[0]);
+        } else {
+            this.setAiming(!this.aiming);
+        }
+    }
+
+    setAiming(aiming) {
+        this.aiming = aiming;
+        this.el.board.classList.toggle("aiming", aiming);
+        document.getElementById("btn-dynamite").setAttribute("aria-pressed", String(aiming));
+        if (aiming) {
+            this.announce("Elige una piedra con el ratón, o pulsa Enter para volar la primera. Escape cancela.");
+        }
+    }
+
+    async blast(row, col) {
+        this.setAiming(false);
+        const result = await this.request("/api/blast", { row, col });
+        if (result && result.ok) {
+            this.applyState(result.data, {});
+            this.sound.playGameOver();
+            replayClass(this.el.board, "shake");
+        } else if (result) {
+            this.announce(result.data.error || "No se pudo usar la dinamita.");
+        }
+    }
+
+    /** Casilla bajo el puntero, teniendo en cuenta los márgenes del tablero. */
+    cellAt(event) {
+        const rect = this.el.tiles.getBoundingClientRect();
+        const size = this.state.size;
+        const col = Math.floor(((event.clientX - rect.left) / rect.width) * size);
+        const row = Math.floor(((event.clientY - rect.top) / rect.height) * size);
+        return row >= 0 && row < size && col >= 0 && col < size ? [row, col] : null;
+    }
+
+    /** Bitácora entre partidas y aviso de las legendarias bloqueadas. */
+    renderLogbook(progress) {
+        const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+        const part = (strong, text) => {
+            const span = el("span");
+            span.append(el("strong", "", strong), ` ${text}`);
+            return span;
+        };
+        const items = [icon("i-book"),
+            part(plural(progress.expeditions, "expedición", "expediciones"), ""),
+            part(plural(progress.wins, "victoria", "victorias"), ""),
+            part(`piso ${progress.best_floor}`, "es tu mejor marca")];
+        if (!progress.legends_unlocked) {
+            const locked = el("span", "locked");
+            locked.append(icon("i-lock"), `Legendarias al llegar al piso ${progress.unlock_floor}`);
+            items.push(locked);
+        }
+        document.getElementById("exp-logbook").replaceChildren(...items);
     }
 
     /** Aviso breve de un suceso (terremoto, fénix, escudo) con su efecto en el tablero. */
@@ -782,7 +885,10 @@ class GameClient {
     updateDialogTexts(state) {
         const info = state.expedition;
         const set = (id, text) => { document.getElementById(id).textContent = text; };
-        document.getElementById("btn-continue").classList.toggle("hidden", Boolean(info));
+        // En la expedición, «Seguir» abre el modo infinito (una sola vez).
+        const continueButton = document.getElementById("btn-continue");
+        continueButton.classList.toggle("hidden", Boolean(info) && info.endless);
+        continueButton.textContent = info ? "Seguir en modo infinito" : "Seguir jugando";
         if (!info) {
             this.dialogDefaults.forEach(([id, original]) => {
                 document.getElementById(id).replaceChildren(
@@ -794,9 +900,12 @@ class GameClient {
         const summary = `${state.score.toLocaleString("es-CO")} puntos, ${info.gold} de oro, `
             + `racha máxima de ${info.best_streak} y ${cards} cartas. Semilla: ${info.seed}.`;
         set("win-title", "¡Expedición completada!");
-        set("win-text", `Superaste los ${info.floors} pisos y llegaste al 2048 con ${summary}`);
+        set("win-text", `Superaste los ${info.floors} pisos y llegaste al 2048 con ${summary} `
+            + "En el modo infinito los objetivos siguen duplicándose: 4096, 8192...");
         set("over-title", info.moves_left === 0 ? "¡Se acabó el tiempo!" : "¡La expedición terminó!");
-        set("over-text", `Llegaste al piso ${info.floor} de ${info.floors} con ${summary}`);
+        const reached = info.endless ? `al piso ${info.floor} en el modo infinito`
+            : `al piso ${info.floor} de ${info.floors}`;
+        set("over-text", `Llegaste ${reached} con ${summary}`);
     }
 
     openModalName() {
@@ -872,6 +981,19 @@ class GameClient {
                 this.handleModalKey(event, modalName);
                 return;
             }
+            if (this.aiming && (event.key === "Escape" || event.key === "Enter")) {
+                event.preventDefault();
+                if (event.key === "Enter" && this.stoneCells().length) {
+                    this.blast(...this.stoneCells()[0]);
+                } else {
+                    this.setAiming(false);
+                }
+                return;
+            }
+            if ((event.key === "x" || event.key === "X") && !event.ctrlKey && !event.metaKey) {
+                this.useDynamite();
+                return;
+            }
             const action = actionForKey(event);
             if (!action) {
                 return;
@@ -895,7 +1017,8 @@ class GameClient {
         onClick("btn-win-restart", () => this.reset());
         onClick("btn-over-restart", () => this.reset());
         onClick("btn-over-undo", () => this.undo());
-        onClick("btn-confirm-restart", () => this.reset());
+        onClick("btn-confirm-restart", () => this.reset(this.pendingDaily));
+        onClick("btn-daily", () => this.requestReset(true));
         onClick("btn-cancel-restart", () => this.toggleModal("confirm", false));
         onClick("btn-sound", () => {
             this.sound.toggle();
@@ -908,6 +1031,13 @@ class GameClient {
             this.applyTheme(next);
         });
         onClick("btn-reroll", () => this.shopAction("reroll"));
+        onClick("btn-dynamite", () => this.useDynamite());
+        this.el.board.addEventListener("click", (event) => {
+            const cell = this.aiming ? this.cellAt(event) : null;
+            if (cell && this.state.grid[cell[0]][cell[1]] === STONE) {
+                this.blast(...cell);
+            }
+        });
         onClick("btn-leave-shop", () => this.shopAction("leave"));
         document.querySelectorAll(".mode-btn").forEach((button) => {
             button.addEventListener("click", () => this.switchMode(button.dataset.mode));

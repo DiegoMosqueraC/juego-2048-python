@@ -18,12 +18,15 @@ Cada expedición tiene una semilla: con la misma semilla y las mismas jugadas
 se repite exactamente la misma partida.
 """
 
+import math
 import random
 from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 
 from config import (
     DEFAULT_BOARD_SIZE,
+    MAX_BOARD_SIZE,
     DIRECTIONS,
     EXPEDITION_TARGETS,
     HASTE_DIVISOR,
@@ -32,7 +35,12 @@ from config import (
     STONE,
 )
 from logic import Game2048, MoveResult
-from storage import HighscoreStorage
+from storage import (
+    PROGRESS_FIELDS,
+    HighscoreStorage,
+    JsonProgressStorage,
+    ProgressStorage,
+)
 from validation import is_strict_int, normalize_direction
 
 
@@ -50,20 +58,25 @@ CARDS = {
     "escoba": Card("Escoba", "Elimina todas las fichas de 2.", "comun"),
     "trebol": Card("Trébol", "Las fichas nuevas son 4 con más frecuencia.", "comun"),
     "bolsa": Card("Bolsa de oro", "Ganas 5 de oro.", "comun"),
-    "dinamita": Card("Dinamita", "Destruye todas las piedras.", "comun"),
+    "dinamita": Card("Dinamita", "Suma 2 cartuchos para volar piedras.", "comun"),
+    "reloj": Card("Reloj de arena", "Prisa te da un 50 % más de jugadas.", "comun"),
     "escudo": Card("Escudo", "Anula las maldiciones del próximo piso.", "rara"),
     "alquimia": Card("Alquimia", "Convierte todas las fichas de 4 en 8.", "rara"),
     "interes": Card("Interés", "Al superar un piso ganas 1 de oro por cada 5 que "
                     "guardes (máx. 5).", "rara"),
+    "pico": Card("Pico de oro", "Cada fusión que forma 128 o más da 1 de oro.", "rara"),
+    "mecha": Card("Mecha larga", "Una jugada sin fusión baja la racha en 1 en vez de "
+                  "apagarla.", "rara"),
     "expansion": Card("Expansión", "El tablero crece una fila y una columna "
-                      "(máx. 6×6).", "legendaria"),
+                      "(máx. 7×7).", "legendaria"),
     "fenix": Card("Fénix", "Si te quedas sin jugadas, se borran los 2 y los 4 y "
                   "sigues (una vez).", "legendaria"),
 }
 RARITY_NAMES = {"comun": "Común", "rara": "Rara", "legendaria": "Legendaria"}
 # Una carta común sale 6 veces más que una legendaria.
-RARITY_WEIGHTS = {"comun": 6, "rara": 3, "legendaria": 1}
-CARD_PRICES = {"comun": 4, "rara": 7, "legendaria": 12}
+# Una legendaria sale 12 veces menos que una común y es la más cara.
+RARITY_WEIGHTS = {"comun": 6, "rara": 3, "legendaria": 0.5}
+CARD_PRICES = {"comun": 4, "rara": 7, "legendaria": 15}
 REROLL_PRICE = 2
 
 CURSES = {
@@ -75,8 +88,28 @@ CURSES = {
     "niebla": ("Niebla", "No ves el número de las fichas de 2 y 4."),
     "terremoto": ("Terremoto", "Cada 8 jugadas el tablero se sacude solo hacia "
                   "un lado."),
+    "inflacion": ("Inflación", "En la tienda de este piso todo cuesta un 50 % más."),
 }
+INFLATION = 1.5
+HOURGLASS_BONUS = 0.5
+GOLDEN_PICK_TILE = 128
+# Las legendarias se descubren al llegar por primera vez a este piso.
+LEGEND_UNLOCK_FLOOR = 4
 GUARDIAN_FLOORS = (3, 6)
+# Desde este piso ya no sale «Calma»: siempre hay una maldición de verdad.
+CALM_UNTIL_FLOOR = 3
+# La mina se ensancha sola en los pisos grandes: piso -> lado mínimo del tablero.
+BOARD_GROWTH = {5: 5, 6: 6, 9: 7, 12: 8}
+# En el modo infinito hay un piso guardián cada tantos pisos.
+ENDLESS_GUARDIAN_EVERY = 3
+# Dificultad por piso: piedras que la mina suma sola, Prisa más corta y tienda
+# más cara.
+EXTRA_STONES_FROM_FLOOR = 4
+MAX_EXTRA_STONES = 4
+HASTE_TIGHTENING = 0.5
+PRICE_STEP_FLOORS = 2
+STARTING_DYNAMITE = 1
+DYNAMITE_PER_CARD = 2
 GUARDIAN_CURSES = 2
 QUAKE_EVERY = 8
 
@@ -90,7 +123,16 @@ GREED_BONUS = 0.5
 CLOVER_BONUS = 0.15
 STREAK_BONUS = 0.1
 MAX_STREAK_STEPS = 10
-MAX_BOARD_EXPANSION = 6
+MAX_BOARD_EXPANSION = 7
+
+# Cartas que solo suman a un contador de la expedición: carta -> (atributo, cantidad).
+COUNTER_CARDS = {
+    "deshacer": ("undo_charges", 2),
+    "codicia": ("multiplier", GREED_BONUS),
+    "bolsa": ("gold", BAG_GOLD),
+    "dinamita": ("dynamite", DYNAMITE_PER_CARD),
+    "fenix": ("phoenix", 1),
+}
 
 
 class Expedition:
@@ -107,16 +149,25 @@ class Expedition:
         size: int = DEFAULT_BOARD_SIZE,
         storage: Optional[HighscoreStorage] = None,
         seed: Optional[int] = None,
+        progress: Optional[ProgressStorage] = None,
     ):
         self.size = size
         self._storage = storage
+        self._progress_storage = (progress if progress is not None
+                                  else JsonProgressStorage())
         self.reset(seed)
 
     # --- Inicio ------------------------------------------------------------------
 
-    def reset(self, seed: Optional[int] = None) -> None:
-        """Empieza una expedición nueva; sin semilla se sortea una."""
-        if seed is None:
+    def reset(self, seed: Optional[int] = None, daily: bool = False) -> None:
+        """
+        Empieza una expedición nueva. Sin semilla se sortea una; con daily=True
+        se usa la del día, igual para todos los que jueguen hoy.
+        """
+        self.daily = daily
+        if daily:
+            seed = daily_seed()
+        elif seed is None:
             # El azar del juego no protege secretos (B311 revisado en logic.py).
             seed = random.randrange(1_000_000)  # nosec B311
         self.seed = seed
@@ -132,6 +183,9 @@ class Expedition:
         self.streak = 0
         self.best_streak = 0
         self.cards: list[str] = []
+        self.dynamite = STARTING_DYNAMITE
+        self.endless = False
+        self._counted = False
         self.shield = False
         self.phoenix = 0
         self.outcome: Optional[str] = None
@@ -142,11 +196,23 @@ class Expedition:
         self._choices: list[str] = []
         self._shop: list[str] = []
         self._shop_open = False
+        self.progress = {**dict.fromkeys(PROGRESS_FIELDS, 0),
+                         **self._progress_storage.load()}
         self.set_curses(["calma"])
 
     @property
     def target(self) -> int:
-        return EXPEDITION_TARGETS[self.floor - 1]
+        """Ficha objetivo; en el modo infinito se sigue duplicando."""
+        last = len(EXPEDITION_TARGETS)
+        if self.floor <= last:
+            return EXPEDITION_TARGETS[self.floor - 1]
+        return EXPEDITION_TARGETS[-1] * 2 ** (self.floor - last)
+
+    @staticmethod
+    def is_guardian(floor: int) -> bool:
+        endless_floor = floor > len(EXPEDITION_TARGETS)
+        return floor in GUARDIAN_FLOORS or (
+            endless_floor and floor % ENDLESS_GUARDIAN_EVERY == 0)
 
     @property
     def status(self) -> str:
@@ -176,7 +242,15 @@ class Expedition:
         result = self._play(direction)
         if not result.moved:
             return result
-        self.streak = self.streak + 1 if result.merged_cells else 0
+        if result.merged_cells:
+            self.streak += 1
+        elif "mecha" in self.cards:
+            self.streak = max(0, self.streak - 1)
+        else:
+            self.streak = 0
+        big_merges = sum(1 for row, col in result.merged_cells
+                         if self.game.grid[row][col] >= GOLDEN_PICK_TILE)
+        self.gold += big_merges * self.cards.count("pico")
         self.best_streak = max(self.best_streak, self.streak)
         self.floor_moves += 1
         if self.moves_left is not None:
@@ -196,9 +270,36 @@ class Expedition:
         if self.game.max_tile() >= self.target:
             self._clear_floor()
         elif self.moves_left == 0:
-            self.outcome = "lost"
+            self._finish("lost")
         elif self.game.game_over:
             self._revive_or_lose()
+
+    def _finish(self, outcome: str) -> None:
+        """Cierra la expedición y la anota en la bitácora."""
+        self.outcome = outcome
+        if not self._counted:  # Perder en el modo infinito no cuenta otra expedición.
+            self._counted = True
+            self.progress["expeditions"] += 1
+        self.progress["wins"] += outcome == "won"
+        self._record_progress()
+
+    def _record_progress(self) -> None:
+        self.progress["best_floor"] = max(self.progress["best_floor"], self.floor)
+        self.progress["best_score"] = max(self.progress["best_score"], self.game.score)
+        self._progress_storage.save(self.progress)
+
+    @property
+    def legends_unlocked(self) -> bool:
+        return self.progress["best_floor"] >= LEGEND_UNLOCK_FLOOR
+
+    def price(self, card: Optional[str] = None) -> int:
+        """
+        Precio de una carta (o de renovar la oferta): sube 1 cada dos pisos y la
+        Inflación lo multiplica.
+        """
+        base = REROLL_PRICE if card is None else CARD_PRICES[CARDS[card].rarity]
+        base += (self.floor - 1) // PRICE_STEP_FLOORS
+        return math.ceil(base * INFLATION) if "inflacion" in self.curses else base
 
     def _revive_or_lose(self) -> None:
         if self.phoenix:
@@ -207,7 +308,7 @@ class Expedition:
             self.event = "fenix"
             self.game.game_over = not self.game.can_move()
         if self.game.game_over:
-            self.outcome = "lost"
+            self._finish("lost")
 
     def _clear_floor(self) -> None:
         earned = max(1, (self.game.score - self._floor_start_score) // POINTS_PER_GOLD)
@@ -215,16 +316,17 @@ class Expedition:
         interest = min(MAX_INTEREST, self.gold // INTEREST_STEP) * interest_cards
         self.gold += earned + interest
         self.reward = {"gold": earned, "interest": interest}
-        if self.floor == len(EXPEDITION_TARGETS):
-            self.outcome = "won"
+        if self.floor == len(EXPEDITION_TARGETS) and not self.endless:
+            self._finish("won")
             return
-        guardian = self.floor in GUARDIAN_FLOORS
+        guardian = self.is_guardian(self.floor)
         self._choices = self._draw_cards(CHOICES_PER_FLOOR, rare_only=guardian)
 
     def _draw_cards(self, count: int, rare_only: bool = False) -> list[str]:
         """Sortea cartas distintas; las de mayor rareza salen con menos frecuencia."""
         pool = [card for card in CARDS if self._is_useful(card)
-                and not (rare_only and CARDS[card].rarity == "comun")]
+                and not (rare_only and CARDS[card].rarity == "comun")
+                and (self.legends_unlocked or CARDS[card].rarity != "legendaria")]
         drawn = []
         while pool and len(drawn) < count:
             weights = [RARITY_WEIGHTS[CARDS[card].rarity] for card in pool]
@@ -234,8 +336,6 @@ class Expedition:
         return drawn
 
     def _is_useful(self, card: str) -> bool:
-        if card == "dinamita":
-            return any(value == STONE for row in self.game.grid for value in row)
         if card == "trebol":
             return self.game.probability_of_four < MAX_PROBABILITY_OF_FOUR
         if card == "expansion":
@@ -275,13 +375,13 @@ class Expedition:
             self._start_next_floor()
             return True
         if action == "reroll":
-            if self.gold < REROLL_PRICE:
+            if self.gold < self.price():
                 return False
-            self.gold -= REROLL_PRICE
+            self.gold -= self.price()
             self._shop = self._draw_cards(SHOP_REROLL_CARDS)
             return True
         card = self._shop[self._checked_index(index, self._shop)]
-        price = CARD_PRICES[CARDS[card].rarity]
+        price = self.price(card)
         if self.gold < price:
             return False
         self.gold -= price
@@ -299,35 +399,30 @@ class Expedition:
         """Agrega la carta al mazo y aplica su efecto."""
         self.cards.append(card)
         game = self.game
-        if card == "deshacer":
-            self.undo_charges += 2
-        elif card == "codicia":
-            self.multiplier += GREED_BONUS
+        if card in COUNTER_CARDS:
+            attribute, amount = COUNTER_CARDS[card]
+            setattr(self, attribute, getattr(self, attribute) + amount)
         elif card == "trebol":
             game.probability_of_four = min(
                 MAX_PROBABILITY_OF_FOUR, game.probability_of_four + CLOVER_BONUS)
-        elif card == "bolsa":
-            self.gold += BAG_GOLD
         elif card == "escudo":
             self.shield = True
-        elif card == "fenix":
-            self.phoenix += 1
         elif card == "expansion":
             self._expand_board()
         elif card == "alquimia":
             game.grid = [[8 if value == 4 else value for value in row]
                          for row in game.grid]
-        elif card in ("escoba", "dinamita"):
-            self._remove_tiles({2} if card == "escoba" else {STONE})
+        elif card == "escoba":
+            self._remove_tiles({2})
         # "interes" no tiene efecto inmediato: se cobra al superar cada piso.
 
     def _remove_tiles(self, values: set) -> None:
         self.game.grid = [[0 if value in values else value for value in row]
                           for row in self.game.grid]
 
-    def _expand_board(self) -> None:
+    def _expand_board(self, limit: int = MAX_BOARD_EXPANSION) -> None:
         game = self.game
-        if game.size >= MAX_BOARD_EXPANSION:
+        if game.size >= limit:
             return
         game.size += 1
         game.grid = [row + [0] for row in game.grid] + [[0] * game.size]
@@ -342,9 +437,18 @@ class Expedition:
         self.floor_moves = 0
         self._floor_start_score = self.game.score
         self.game.clear_history()
-        if self.floor in GUARDIAN_FLOORS:
-            harmful = [curse for curse in CURSES if curse != "calma"]
+        while self.game.size < BOARD_GROWTH.get(self.floor, 0):
+            self._expand_board(limit=MAX_BOARD_SIZE)
+            self.event = "crece"
+        # La mina se derrumba sola en los pisos hondos.
+        extra = min(MAX_EXTRA_STONES, self.floor - EXTRA_STONES_FROM_FLOOR + 1)
+        if extra > 0:
+            self._place_stones(extra)
+        harmful = [curse for curse in CURSES if curse != "calma"]
+        if self.is_guardian(self.floor):
             curses = self._rng.sample(harmful, GUARDIAN_CURSES)
+        elif self.floor > CALM_UNTIL_FLOOR:
+            curses = [self._rng.choice(harmful)]
         else:
             curses = [self._rng.choice(list(CURSES))]
         if self.shield:
@@ -352,6 +456,8 @@ class Expedition:
             self.event = "escudo"
             curses = ["calma"]
         self.set_curses(curses)
+        if self.floor > self.progress["best_floor"]:
+            self._record_progress()  # Así un piso nuevo desbloquea lo que toque ya.
         self.game.game_over = not self.game.can_move()
         if self.game.game_over:
             self._revive_or_lose()
@@ -364,7 +470,9 @@ class Expedition:
             if curse in ("piedra", "derrumbe"):
                 self._place_stones(1 if curse == "piedra" else 2)
             elif curse == "prisa":
-                self.moves_left = self.target // HASTE_DIVISOR
+                bonus = 1 + HOURGLASS_BONUS * self.cards.count("reloj")
+                divisor = HASTE_DIVISOR + HASTE_TIGHTENING * max(0, self.floor - 2)
+                self.moves_left = int(self.target // divisor * bonus)
 
     def _place_stones(self, count: int) -> None:
         empty = self.game.get_empty_cells()
@@ -384,14 +492,45 @@ class Expedition:
         return True
 
     def continue_playing(self) -> bool:
-        """La expedición no tiene victoria pendiente: termina al ganar."""
-        return False
+        """
+        Tras ganar, empieza el modo infinito: una carta rara gratis y a seguir
+        bajando con objetivos de 4096, 8192...
+
+        :return: False si no hay una victoria reciente o el modo ya empezó.
+        """
+        if self.outcome != "won" or self.endless:
+            return False
+        self.endless = True
+        self.outcome = None
+        self._choices = self._draw_cards(CHOICES_PER_FLOOR, rare_only=True)
+        return True
+
+    def blast(self, row: object, col: object) -> bool:
+        """
+        Vuela la piedra de (row, col) gastando un cartucho de dinamita.
+
+        :return: False si no quedan cartuchos o la partida no está en juego.
+        :raises ValueError: si la casilla no existe o no tiene una piedra.
+        """
+        if self.status != "playing" or self.dynamite == 0:
+            return False
+        size = self.game.size
+        if not all(is_strict_int(value) and 0 <= value < size for value in (row, col)):
+            raise ValueError(f"La fila y la columna deben estar entre 0 y {size - 1}")
+        if self.game.grid[row][col] != STONE:
+            raise ValueError("En esa casilla no hay una piedra")
+        self.dynamite -= 1
+        self.game.grid[row][col] = 0
+        self.game.clear_history()  # Deshacer no puede devolver la piedra.
+        self.game.game_over = not self.game.can_move()
+        self.event = "dinamita"
+        return True
 
     def _card_dict(self, card: str) -> dict:
         info = CARDS[card]
         return {"id": card, "name": info.name, "description": info.description,
                 "rarity": info.rarity, "rarity_name": RARITY_NAMES[info.rarity],
-                "price": CARD_PRICES[info.rarity]}
+                "price": self.price(card)}
 
     def to_dict(self) -> dict:
         data = self.game.to_dict()
@@ -413,7 +552,10 @@ class Expedition:
             "floors": len(EXPEDITION_TARGETS),
             "target": self.target,
             "seed": self.seed,
-            "guardian": self.floor in GUARDIAN_FLOORS,
+            "guardian": self.is_guardian(self.floor),
+            "danger": self.floor,
+            "endless": self.endless,
+            "dynamite": self.dynamite,
             "curses": [{"id": curse, "name": CURSES[curse][0],
                         "description": CURSES[curse][1]} for curse in self.curses],
             "moves_left": self.moves_left,
@@ -430,8 +572,17 @@ class Expedition:
             "choices": [self._card_dict(card) for card in self._choices],
             "shop": {"open": self._shop_open,
                      "items": [self._card_dict(card) for card in self._shop],
-                     "reroll_price": REROLL_PRICE},
+                     "reroll_price": self.price()},
+            "daily": self.daily,
+            "progress": {**self.progress, "legends_unlocked": self.legends_unlocked,
+                         "unlock_floor": LEGEND_UNLOCK_FLOOR},
             "event": self.event,
             "outcome": self.outcome,
         }
         return data
+
+
+def daily_seed(today: Optional[date] = None) -> int:
+    """Semilla del reto diario: la fecha como número, por ejemplo 20261125."""
+    today = today or date.today()
+    return today.year * 10_000 + today.month * 100 + today.day

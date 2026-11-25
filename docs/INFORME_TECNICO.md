@@ -168,3 +168,10 @@ ejecución aprobó las cuatro combinaciones en 1 min 52 s
 - `docs/evidencias/03_tdd_fase_verde`: las mismas pruebas aprobadas.
 - `docs/evidencias/04_resultado_final`: flake8, bandit, pytest con cobertura y `ci_local.py`.
 - `docs/img`: capturas de la interfaz y de la consola.
+
+## 10. Modo expedición (versiones 2.1.0 a 2.4.0)
+
+Después de la versión 2.0.0 se agregó el modo expedición como cambio evolutivo
+(EV-01, ver [EVIDENCIAS_EXAMEN.md](EVIDENCIAS_EXAMEN.md)). El juego pasó de
+283 a 441 pruebas automatizadas (431 de Python y 10 de JavaScript) y la cobertura
+quedó en 97,7 %. La arquitectura actual está en [ARQUITECTURA.md](ARQUITECTURA.md).

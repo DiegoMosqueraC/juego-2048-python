@@ -60,6 +60,10 @@ def is_valid_tile(value: object) -> bool:
     return value == 0 or (value >= 2 and (value & (value - 1)) == 0)
 
 
+def _is_valid_cell(cell: object) -> bool:
+    return cell == STONE or is_valid_tile(cell)
+
+
 def validate_grid(value: object) -> list[list[int]]:
     """
     Verifica que un tablero sea una lista cuadrada de filas con fichas válidas.
@@ -71,7 +75,7 @@ def validate_grid(value: object) -> list[list[int]]:
     size = validate_board_size(len(value))
     if any(len(row) != size for row in value):
         raise ValueError("El tablero debe ser cuadrado")
-    if not all(cell == STONE or is_valid_tile(cell) for row in value for cell in row):
+    if not all(_is_valid_cell(cell) for row in value for cell in row):
         raise ValueError(
             "Las fichas deben ser 0, piedras o potencias de 2 mayores que 1")
     return [row[:] for row in value]

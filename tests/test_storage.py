@@ -77,3 +77,23 @@ def test_default_path_is_absolute_without_environment_variable(monkeypatch):
     path = default_highscore_path()
     assert path.is_absolute()
     assert path.name == "highscore.json"
+
+
+# --- Bitácora de expediciones (progress.json) -----------------------------------------
+
+def test_progress_starts_empty_and_survives_a_save(tmp_path):
+    from storage import JsonProgressStorage
+    storage = JsonProgressStorage(tmp_path / "progress.json")
+    assert storage.load() == {"expeditions": 0, "wins": 0, "best_floor": 0,
+                              "best_score": 0}
+    storage.save({"expeditions": 3, "wins": 1, "best_floor": 6, "best_score": 9000})
+    assert JsonProgressStorage(tmp_path / "progress.json").load()["best_floor"] == 6
+
+
+@pytest.mark.parametrize("content", ["{roto", "[1, 2]", '{"wins": -3}',
+                                     '{"best_floor": "6"}'])
+def test_damaged_progress_falls_back_to_zero(tmp_path, content):
+    from storage import JsonProgressStorage
+    path = tmp_path / "progress.json"
+    path.write_text(content, encoding="utf-8")
+    assert JsonProgressStorage(path).load()["best_floor"] == 0

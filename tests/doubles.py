@@ -52,3 +52,18 @@ class StubRandom:
 
     def random(self) -> float:
         return self.draws.pop(0) if self.draws else 0.95
+
+
+class FakeProgressStorage:
+    """Bitácora en memoria (fake + spy): guarda el progreso y cuenta los guardados."""
+
+    def __init__(self, initial=None):
+        self.data = dict(initial or {})
+        self.saves = 0
+
+    def load(self) -> dict:
+        return dict(self.data)
+
+    def save(self, data: dict) -> None:
+        self.data = dict(data)
+        self.saves += 1

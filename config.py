@@ -42,6 +42,8 @@ DIRECTION_ALIASES = {
 
 # --- Persistencia del récord -------------------------------------------------
 HIGHSCORE_FILENAME = "highscore.json"
+# Bitácora de las expediciones: partidas, victorias, mejor piso y mejor puntuación.
+PROGRESS_FILENAME = "progress.json"
 # Permite guardar el récord en otra carpeta (útil en pruebas o instalaciones).
 DATA_DIR_ENV_VAR = "JUEGO2048_DATA_DIR"
 

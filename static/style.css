@@ -430,6 +430,85 @@ kbd {
     box-shadow: 0 0 0 1px var(--curse), 0 0 22px rgba(240, 96, 108, 0.25);
 }
 
+.danger-meter {
+    --danger-color: var(--safe);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.danger-meter .icon {
+    color: var(--danger-color);
+}
+
+.danger-pips {
+    display: flex;
+    flex: 1;
+    gap: 3px;
+}
+
+.danger-pips span {
+    flex: 1;
+    height: 7px;
+    border-radius: var(--radius-full);
+    background: var(--secondary);
+}
+
+.danger-pips span.on {
+    background: var(--danger-color);
+}
+
+.danger-value {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1rem;
+    min-width: 1.5em;
+    text-align: right;
+    color: var(--danger-color);
+}
+
+.danger-meter[data-level="mid"] { --danger-color: var(--gold); }
+.danger-meter[data-level="high"] { --danger-color: var(--torch); }
+.danger-meter[data-level="max"] { --danger-color: var(--curse); }
+
+.stat-dynamite {
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px dashed var(--bg-card-border);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.stat-dynamite:hover:not(:disabled),
+.stat-dynamite[aria-pressed="true"] {
+    background: var(--secondary);
+    border-color: var(--curse);
+}
+
+.stat-dynamite .icon {
+    color: var(--curse);
+}
+
+.stat-dynamite:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Apuntando con la dinamita: las piedras laten y el cursor apunta. */
+.game-board.aiming {
+    cursor: crosshair;
+}
+
+.aiming .tile-stone .tile-inner {
+    outline: 3px solid var(--curse);
+    outline-offset: 2px;
+    animation: pulse 0.8s ease-in-out infinite;
+}
+
 .exp-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
@@ -590,6 +669,56 @@ kbd {
     align-self: center;
     align-items: center;
     gap: 4px;
+}
+
+.exp-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-small {
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+}
+
+.daily-badge {
+    margin-left: 6px;
+    padding: 1px 8px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #1f1a10;
+    background: var(--gold);
+    border-radius: var(--radius-full);
+}
+
+.exp-logbook {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 4px 10px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.exp-logbook .icon {
+    width: 15px;
+    height: 15px;
+}
+
+.exp-logbook strong {
+    color: var(--text-primary);
+}
+
+.exp-logbook .locked {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--legend);
 }
 
 .exp-event {
@@ -806,11 +935,13 @@ kbd {
 
 /* Fénix y escudo: destello sobre el tablero. */
 .game-board.flash-fenix,
-.game-board.flash-escudo {
+.game-board.flash-escudo,
+.game-board.flash-crece {
     animation: flash 0.8s ease-out;
 }
 
 .game-board.flash-fenix { --flash: rgba(255, 140, 40, 0.75); }
+.game-board.flash-crece { --flash: rgba(242, 179, 61, 0.6); }
 .game-board.flash-escudo { --flash: rgba(90, 169, 240, 0.7); }
 
 @keyframes flash {
@@ -1197,6 +1328,74 @@ kbd {
     .mode-hint {
         display: none;
     }
+}
+
+/* --------------------------------------------------------------------------
+   Distribución en pantalla: todo debe verse sin desplazarse
+   -------------------------------------------------------------------------- */
+/* Celular y ventanas angostas: el tablero sube justo después de los botones y
+   su lado se limita a lo que deja libre la altura de la pantalla. */
+.game-wrapper {
+    order: 1;
+    width: min(100%, max(280px, calc(100vh - 230px)));
+    width: min(100%, max(280px, calc(100dvh - 230px)));
+    align-self: center;
+}
+
+.expedition-bar { order: 2; }
+.virtual-dpad { order: 3; }
+.footer { order: 4; }
+
+/* Computador: panel de información a la izquierda y tablero a la derecha, del
+   alto de la ventana. */
+@media (min-width: 900px) {
+    body {
+        align-items: flex-start;
+        padding: 20px 24px;
+    }
+
+    .app-container {
+        --board-side: min(calc(100vh - 40px), 720px);
+        --board-side: min(calc(100dvh - 40px), 720px);
+        max-width: 1180px;
+        display: grid;
+        grid-template-columns: minmax(330px, 400px) var(--board-side);
+        grid-template-areas:
+            "header board"
+            "modes board"
+            "toolbar board"
+            "bar board"
+            "footer board";
+        grid-template-rows: auto auto auto auto 1fr;
+        justify-content: center;
+        align-items: start;
+        column-gap: 28px;
+        row-gap: 12px;
+    }
+
+    .header { grid-area: header; }
+    .mode-switch { grid-area: modes; }
+    .toolbar { grid-area: toolbar; }
+    .expedition-bar { grid-area: bar; }
+    .footer { grid-area: footer; text-align: left; }
+
+    .game-wrapper {
+        grid-area: board;
+        width: var(--board-side);
+    }
+
+    .virtual-dpad {
+        display: none;
+    }
+}
+
+/* Pantallas bajas (portátiles pequeños): se compacta el panel lateral. */
+@media (min-width: 900px) and (max-height: 760px) {
+    .logo-title { font-size: 2.6rem; }
+    .mode-hint,
+    .exp-curse-text,
+    .expedition-help { display: none; }
+    .expedition-bar { gap: 6px; padding: 8px 10px; }
 }
 
 /* --------------------------------------------------------------------------
