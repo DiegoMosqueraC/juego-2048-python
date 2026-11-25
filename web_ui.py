@@ -206,6 +206,7 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
             "/api/continue": self._api_continue,
             "/api/choose": self._api_choose,
             "/api/mode": self._api_mode,
+            "/api/shop": self._api_shop,
         }
         action = actions.get(path)
         try:
@@ -263,6 +264,19 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
             raise RequestError(400, str(error)) from None
         if not chosen:
             raise RequestError(409, "No hay una elección pendiente")
+        return self.game.to_dict()
+
+    def _api_shop(self, payload: dict) -> dict:
+        # Solo la expedición tiene tienda; el modo clásico no tiene shop_action().
+        shop_action = getattr(self.game, "shop_action", None)
+        if shop_action is None:
+            raise RequestError(409, "No hay una tienda abierta")
+        try:
+            done = shop_action(payload.get("action"), payload.get("index"))
+        except ValueError as error:
+            raise RequestError(400, str(error)) from None
+        if not done:
+            raise RequestError(409, "No se pudo: falta oro o la tienda está cerrada")
         return self.game.to_dict()
 
     # --- Utilidades ----------------------------------------------------------------
