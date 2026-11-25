@@ -124,6 +124,12 @@
 
         <!-- Modo expedición: piso, recursos, maldiciones y mazo de la partida -->
         <section id="expedition-bar" class="expedition-bar hidden" aria-label="Estado de la expedición">
+            <div class="danger-meter" id="exp-danger" title="Peligro del piso: sube con cada piso que bajas">
+                <svg class="icon" aria-hidden="true"><use href="#i-skull"></use></svg>
+                <span class="danger-label">Peligro</span>
+                <span class="danger-pips" id="exp-danger-pips" aria-hidden="true"></span>
+                <strong class="danger-value" id="exp-danger-value">1</strong>
+            </div>
             <div class="exp-stats">
                 <div class="stat" title="Piso actual de la expedición">
                     <svg class="icon" aria-hidden="true"><use href="#i-stairs"></use></svg>
@@ -149,6 +155,10 @@
                     <svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg>
                     <strong class="stat-value" id="exp-undo">1</strong><span class="stat-label">Deshacer</span>
                 </div>
+                <button class="stat stat-dynamite" id="btn-dynamite" title="Dinamita: vuela una piedra (tecla X)">
+                    <svg class="icon" aria-hidden="true"><use href="#i-card-dinamita"></use></svg>
+                    <strong class="stat-value" id="exp-dynamite">1</strong><span class="stat-label">Dinamita</span>
+                </button>
                 <div class="stat stat-moves hidden" id="exp-moves-box" title="Jugadas que quedan por la maldición Prisa">
                     <svg class="icon" aria-hidden="true"><use href="#i-hourglass"></use></svg>
                     <strong class="stat-value" id="exp-moves">0</strong><span class="stat-label">Jugadas</span>
@@ -245,7 +255,7 @@
         <footer class="footer">
             <p id="controls-help"><strong>Controles:</strong> flechas del teclado o <strong>W, A, S, D</strong>. En el celular, desliza el dedo sobre el tablero.</p>
             <p class="shortcuts-note">Atajos: <kbd>U</kbd> deshacer, <kbd>R</kbd> reiniciar.</p>
-            <p class="shortcuts-note expedition-help hidden">Expedición: llega a la ficha objetivo de cada piso. Los puntos se vuelven oro (1 por cada 100) para la tienda; fusionar en jugadas seguidas sube la racha. Los pisos 3 y 6 son guardianes con dos maldiciones. Teclas <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> para elegir o comprar cartas.</p>
+            <p class="shortcuts-note expedition-help hidden">Expedición: llega a la ficha objetivo de cada piso. Los puntos se vuelven oro (1 por cada 100) para la tienda; fusionar en jugadas seguidas sube la racha. Los pisos 3 y 6 son guardianes con dos maldiciones. Teclas <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> para elegir o comprar cartas; <kbd>X</kbd> usa la dinamita.</p>
         </footer>
     </div>
 

@@ -12,6 +12,11 @@ identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLO
 - Bitácora entre partidas (`progress.json`): expediciones, victorias, mejor piso y
   mejor puntuación; las cartas legendarias se desbloquean al llegar al piso 4.
 - Cartas Reloj de arena, Pico de oro y Mecha larga, y la maldición Inflación.
+- Dificultad visible por piso (medidor de peligro): piedras automáticas desde el
+  piso 4, Prisa más corta en los pisos hondos y tienda más cara cada dos pisos.
+- Dinamita: cartuchos para volar la piedra elegida (`POST /api/blast`, tecla X).
+- Modo infinito tras ganar: objetivos de 4096 en adelante, guardián cada 3 pisos y
+  tablero de hasta 8×8.
 - Las pruebas usan una carpeta temporal de datos y nunca tocan los archivos del jugador.
 
 ### Cambiado
@@ -20,6 +25,8 @@ identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLO
   botones y la expedición debajo.
 - La mina se ensancha sola: 5×5 en el piso de 1024 y 6×6 en el de 2048, con aviso.
 - Expansión llega hasta 7×7 y desde el piso 4 ya no sale la maldición Calma.
+- Las legendarias cuestan 15 y salen la mitad de veces; la carta Dinamita da 2
+  cartuchos en vez de destruir todas las piedras.
 
 ## [2.3.0] - 2026-11-25
 

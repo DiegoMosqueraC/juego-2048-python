@@ -35,12 +35,20 @@ juega igual: las cartas, las maldiciones y la tienda cambian en cada una.
    el 3 ofrece solo cartas raras o legendarias. Desde el piso 4 ya no sale *Calma*.
 6. **La mina se ensancha.** Al llegar al piso de 1024 el tablero pasa a 5×5 y al de
    2048 a 6×6; la carta *Expansión* puede llevarlo hasta 7×7.
-7. **Reto del día.** El botón *Reto del día* empieza la expedición con la semilla
+7. **Peligro.** Cada piso es más difícil y la barra lo muestra: desde el piso 4 la
+   mina suma piedras sola (1, 2, 3...), *Prisa* da menos jugadas en los pisos
+   hondos y la tienda sube 1 de oro cada dos pisos.
+8. **Dinamita.** Empiezas con un cartucho; el botón *Dinamita* (o la tecla `X`)
+   vuela la piedra que elijas con el ratón (Enter vuela la primera).
+9. **Modo infinito.** Al ganar, *Seguir en modo infinito* da una carta rara gratis y
+   sigue con objetivos de 4096, 8192...: un guardián cada 3 pisos y el tablero
+   crece a 7×7 en el piso 9 y a 8×8 en el 12.
+10. **Reto del día.** El botón *Reto del día* empieza la expedición con la semilla
    de la fecha (por ejemplo 20261125): la misma para todos los que jueguen hoy.
-8. **Bitácora.** Se guardan entre partidas las expediciones jugadas, las victorias,
+11. **Bitácora.** Se guardan entre partidas las expediciones jugadas, las victorias,
    el mejor piso y la mejor puntuación (`progress.json`, junto al récord). Las cartas
    legendarias se desbloquean la primera vez que llegas al piso 4.
-9. **Deshacer** gasta usos: empiezas con uno. Si el tablero se bloquea o se acaban
+12. **Deshacer** gasta usos: empiezas con uno. Si el tablero se bloquea o se acaban
    las jugadas de *Prisa*, la expedición termina.
 
 | Carta | Rareza (precio) | Efecto |
@@ -50,17 +58,18 @@ juega igual: las cartas, las maldiciones y la tienda cambian en cada una.
 | Escoba | Común (4) | Elimina todas las fichas de 2. |
 | Trébol | Común (4) | Más fichas nuevas de 4 (hasta 50 %). |
 | Bolsa de oro | Común (4) | Ganas 5 de oro. |
-| Dinamita | Común (4) | Destruye todas las piedras (solo aparece si hay piedras). |
+| Dinamita | Común (4) | Suma 2 cartuchos para volar piedras. |
 | Reloj de arena | Común (4) | *Prisa* te da un 50 % más de jugadas. |
 | Escudo | Rara (7) | Anula las maldiciones del próximo piso. |
 | Alquimia | Rara (7) | Convierte todas las fichas de 4 en 8. |
 | Interés | Rara (7) | Al superar un piso, 1 de oro por cada 5 guardados (máx. 5). |
 | Pico de oro | Rara (7) | Cada fusión que forma 128 o más da 1 de oro. |
 | Mecha larga | Rara (7) | Una jugada sin fusión baja la racha en 1 en vez de apagarla. |
-| Expansión | Legendaria (12) | El tablero crece una fila y una columna (máx. 7×7). |
-| Fénix | Legendaria (12) | Si te quedas sin jugadas, borra los 2 y los 4 y sigues (una vez). |
+| Expansión | Legendaria (15) | El tablero crece una fila y una columna (máx. 7×7). |
+| Fénix | Legendaria (15) | Si te quedas sin jugadas, borra los 2 y los 4 y sigues (una vez). |
 
-Las comunes salen 6 veces más que las legendarias y las raras 3 veces más.
+Las legendarias son las más difíciles de conseguir: salen 12 veces menos que las
+comunes y cuestan 15. Los precios suben 1 de oro cada dos pisos.
 
 | Maldición | Efecto |
 | :--- | :--- |
@@ -149,6 +158,7 @@ static/ (index.html, style.css, app.js, game-utils.js)
 | `POST /api/continue` | `{}` | Estado, o `409` si no hay una victoria pendiente |
 | `POST /api/mode` | `{"mode": "classic"}` o `{"mode": "expedition"}` | Estado de la partida de ese modo; `400` si el modo no existe |
 | `POST /api/choose` | `{"index": 0}` | Toma gratis esa carta y abre la tienda; `400` si el índice no es válido; `409` si no hay elección pendiente |
+| `POST /api/blast` | `{"row": 0, "col": 2}` | Vuela esa piedra con un cartucho; `400` si ahí no hay piedra; `409` si no quedan cartuchos o es el modo clásico |
 | `POST /api/shop` | `{"action": "buy", "index": 0}`, `{"action": "reroll"}` o `{"action": "leave"}` | Compra, renueva la oferta o baja al piso siguiente; `400` si la acción no es válida; `409` si falta oro o la tienda está cerrada |
 
 Todo estado incluye `mode` (`"classic"` o `"expedition"`). En la expedición trae además un objeto

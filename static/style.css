@@ -430,6 +430,85 @@ kbd {
     box-shadow: 0 0 0 1px var(--curse), 0 0 22px rgba(240, 96, 108, 0.25);
 }
 
+.danger-meter {
+    --danger-color: var(--safe);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.danger-meter .icon {
+    color: var(--danger-color);
+}
+
+.danger-pips {
+    display: flex;
+    flex: 1;
+    gap: 3px;
+}
+
+.danger-pips span {
+    flex: 1;
+    height: 7px;
+    border-radius: var(--radius-full);
+    background: var(--secondary);
+}
+
+.danger-pips span.on {
+    background: var(--danger-color);
+}
+
+.danger-value {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1rem;
+    min-width: 1.5em;
+    text-align: right;
+    color: var(--danger-color);
+}
+
+.danger-meter[data-level="mid"] { --danger-color: var(--gold); }
+.danger-meter[data-level="high"] { --danger-color: var(--torch); }
+.danger-meter[data-level="max"] { --danger-color: var(--curse); }
+
+.stat-dynamite {
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px dashed var(--bg-card-border);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.stat-dynamite:hover:not(:disabled),
+.stat-dynamite[aria-pressed="true"] {
+    background: var(--secondary);
+    border-color: var(--curse);
+}
+
+.stat-dynamite .icon {
+    color: var(--curse);
+}
+
+.stat-dynamite:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Apuntando con la dinamita: las piedras laten y el cursor apunta. */
+.game-board.aiming {
+    cursor: crosshair;
+}
+
+.aiming .tile-stone .tile-inner {
+    outline: 3px solid var(--curse);
+    outline-offset: 2px;
+    animation: pulse 0.8s ease-in-out infinite;
+}
+
 .exp-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
