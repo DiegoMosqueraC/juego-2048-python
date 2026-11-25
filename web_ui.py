@@ -239,7 +239,15 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
         return {**self.game.to_dict(), "undone": undone}
 
     def _api_reset(self, payload: dict) -> dict:
-        self.game.reset()
+        daily = payload.get("daily", False)
+        if not isinstance(daily, bool):
+            raise RequestError(400, "daily debe ser true o false")
+        if not daily:
+            self.game.reset()
+        elif self.game.MODE != Expedition.MODE:
+            raise RequestError(409, "El reto diario es del modo expedición")
+        else:
+            self.game.reset(daily=True)
         return self.game.to_dict()
 
     def _api_continue(self, payload: dict) -> dict:

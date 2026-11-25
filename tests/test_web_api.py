@@ -267,3 +267,23 @@ def test_switching_to_expedition_from_classic_creates_one(api_server):
 def test_unknown_mode_returns_400(api_server, mode):
     status, _, _ = send_request(api_server, "POST", "/api/mode", body={"mode": mode})
     assert status == 400
+
+
+def test_daily_reset_starts_the_daily_expedition(expedition_server):
+    from roguelike import daily_seed
+    status, _, data = send_request(expedition_server, "POST", "/api/reset",
+                                   body={"daily": True})
+    assert status == 200
+    assert data["expedition"]["seed"] == daily_seed()
+
+
+@pytest.mark.parametrize("daily", ["si", 1, None])
+def test_daily_must_be_true_or_false(expedition_server, daily):
+    status, _, _ = send_request(expedition_server, "POST", "/api/reset",
+                                body={"daily": daily})
+    assert status == 400
+
+
+def test_daily_reset_in_classic_mode_returns_409(api_server):
+    status, _, _ = send_request(api_server, "POST", "/api/reset", body={"daily": True})
+    assert status == 409

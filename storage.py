@@ -1,9 +1,10 @@
 """
-storage.py - Persistencia del récord de puntuación
-===================================================
+storage.py - Persistencia del récord y de la bitácora de expediciones
+=====================================================================
 Separa el acceso a disco de la lógica del juego. Game2048 depende solo de la
-interfaz HighscoreStorage (métodos load y save), por lo que en las pruebas se
-puede sustituir por un doble en memoria sin tocar el archivo real del jugador.
+interfaz HighscoreStorage y Expedition de ProgressStorage (métodos load y save),
+por lo que en las pruebas se sustituyen por dobles en memoria sin tocar los
+archivos reales del jugador.
 """
 
 import json
@@ -13,7 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Protocol
 
-from config import DATA_DIR_ENV_VAR, HIGHSCORE_FILENAME
+from config import DATA_DIR_ENV_VAR, HIGHSCORE_FILENAME, PROGRESS_FILENAME
 from validation import validate_score
 
 logger = logging.getLogger(__name__)
@@ -31,16 +32,40 @@ class HighscoreStorage(Protocol):
         """Guarda un nuevo récord."""
 
 
-def default_highscore_path() -> Path:
+def default_data_dir() -> Path:
     """
-    Ruta absoluta del archivo de récord.
+    Carpeta de los datos del jugador.
 
-    Se ubica junto al programa (no en el directorio de trabajo, BUG-08) salvo
-    que la variable de entorno JUEGO2048_DATA_DIR indique otra carpeta.
+    Es la del programa (no el directorio de trabajo, BUG-08) salvo que la
+    variable de entorno JUEGO2048_DATA_DIR indique otra.
     """
     data_dir = os.environ.get(DATA_DIR_ENV_VAR)
-    base_dir = Path(data_dir) if data_dir else PROGRAM_DIR
-    return base_dir / HIGHSCORE_FILENAME
+    return Path(data_dir) if data_dir else PROGRAM_DIR
+
+
+def default_highscore_path() -> Path:
+    """Ruta absoluta del archivo de récord."""
+    return default_data_dir() / HIGHSCORE_FILENAME
+
+
+def write_json_atomically(path: Path, data: dict) -> None:
+    """
+    Escribe primero en un archivo temporal y luego reemplaza el definitivo, para
+    que un cierre inesperado nunca deje el archivo a medias.
+
+    :raises OSError: si no se puede escribir en la carpeta.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.stem}-", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            json.dump(data, file, indent=4)
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.remove(temp_name)
 
 
 class JsonHighscoreStorage:
@@ -76,17 +101,55 @@ class JsonHighscoreStorage:
         """
         value = validate_score(value)
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            descriptor, temp_name = tempfile.mkstemp(
-                dir=self.path.parent, prefix=".highscore-", suffix=".tmp"
-            )
-            try:
-                with os.fdopen(descriptor, "w", encoding="utf-8") as file:
-                    json.dump({"highscore": value}, file, indent=4)
-                os.replace(temp_name, self.path)
-            finally:
-                if os.path.exists(temp_name):
-                    os.remove(temp_name)
+            write_json_atomically(self.path, {"highscore": value})
         except OSError as error:
             # Perder el récord no debe interrumpir la partida: se avisa en el registro.
             logger.warning("No se pudo guardar el récord en %s: %s", self.path, error)
+
+
+# -----------------------------------------------------------------------------
+# Bitácora de expediciones
+# -----------------------------------------------------------------------------
+
+PROGRESS_FIELDS = ("expeditions", "wins", "best_floor", "best_score")
+
+
+class ProgressStorage(Protocol):
+    """Contrato de la bitácora: un diccionario con los campos de PROGRESS_FIELDS."""
+
+    def load(self) -> dict:
+        """Devuelve la bitácora guardada; los campos que falten valen 0."""
+
+    def save(self, data: dict) -> None:
+        """Guarda la bitácora completa."""
+
+
+class JsonProgressStorage:
+    """Guarda la bitácora en progress.json, junto al récord."""
+
+    def __init__(self, path: Path | str | None = None):
+        default = default_data_dir() / PROGRESS_FILENAME
+        self.path = Path(path) if path is not None else default
+
+    def load(self) -> dict:
+        """Lee y valida la bitácora; si falta o está dañada empieza de cero."""
+        empty = dict.fromkeys(PROGRESS_FIELDS, 0)
+        try:
+            with self.path.open(encoding="utf-8") as file:
+                data = json.load(file)
+            if not isinstance(data, dict):
+                raise ValueError("el archivo no contiene un objeto JSON")
+            return {field: validate_score(data.get(field, 0))
+                    for field in PROGRESS_FIELDS}
+        except FileNotFoundError:
+            return empty
+        except (OSError, ValueError) as error:
+            logger.warning("Bitácora inválida en %s: %s", self.path, error)
+            return empty
+
+    def save(self, data: dict) -> None:
+        clean = {field: validate_score(data.get(field, 0)) for field in PROGRESS_FIELDS}
+        try:
+            write_json_atomically(self.path, clean)
+        except OSError as error:
+            logger.warning("No se pudo guardar la bitácora en %s: %s", self.path, error)

@@ -7,12 +7,15 @@ tienda; cada piso trae maldiciones y los pisos guardianes traen dos. Se prueba
 con semillas fijas y tableros preparados para que cada resultado sea exacto.
 """
 
+from datetime import date
+
 import pytest
 
 from config import EXPEDITION_TARGETS, STONE
-from doubles import FakeHighscoreStorage
+from doubles import FakeHighscoreStorage, FakeProgressStorage
 from roguelike import (
     BOARD_GROWTH,
+    LEGEND_UNLOCK_FLOOR,
     CALM_UNTIL_FLOOR,
     CARD_PRICES,
     CARDS,
@@ -22,6 +25,7 @@ from roguelike import (
     QUAKE_EVERY,
     REROLL_PRICE,
     Expedition,
+    daily_seed,
 )
 
 S = STONE
@@ -30,8 +34,14 @@ BLOCKED = [[2, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 4, 2]]
 
 
 @pytest.fixture
-def expedition():
-    return Expedition(storage=FakeHighscoreStorage(), seed=7)
+def progress():
+    # Con las legendarias desbloqueadas, como si ya se hubiera llegado al piso 4.
+    return FakeProgressStorage({"best_floor": LEGEND_UNLOCK_FLOOR})
+
+
+@pytest.fixture
+def expedition(progress):
+    return Expedition(storage=FakeHighscoreStorage(), seed=7, progress=progress)
 
 
 def reach_target(exp):
@@ -566,3 +576,102 @@ def test_no_calm_floors_after_the_early_floors(expedition):
     for _ in range(40):
         go_down_to(expedition, CALM_UNTIL_FLOOR + 1)
         assert "calma" not in expedition.curses
+
+
+# --- Cartas nuevas e Inflación ----------------------------------------------------
+
+def test_card_hourglass_gives_more_haste_moves(expedition):
+    expedition.take_card("reloj")
+    expedition.set_curses(["prisa"])
+    assert expedition.moves_left == int(expedition.target // 3 * 1.5)
+
+
+def test_card_golden_pick_pays_for_big_merges(expedition):
+    expedition.take_card("pico")
+    expedition.floor = 3
+    expedition.game.grid = [[64, 64, 8, 8], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    expedition.move("left")
+    # Solo la fusión que forma 128 paga oro; la de 16 no.
+    assert expedition.gold == 1
+
+
+def test_card_long_fuse_only_lowers_the_streak(expedition):
+    expedition.take_card("mecha")
+    expedition.streak = 4
+    expedition.game.grid = [[2, 0, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    expedition.move("right")
+    assert expedition.streak == 3
+
+
+def test_curse_inflation_raises_the_shop_prices(expedition):
+    expedition.set_curses(["inflacion"])
+    open_shop(expedition, ["codicia"])
+    shop = expedition.to_dict()["expedition"]["shop"]
+    assert shop["items"][0]["price"] == 6
+    assert shop["reroll_price"] == 3
+    expedition.gold = 5
+    assert expedition.shop_action("buy", 0) is False
+    expedition.gold = 6
+    assert expedition.shop_action("buy", 0) is True
+    assert expedition.gold == 0
+
+
+# --- Reto diario ---------------------------------------------------------------
+
+def test_daily_seed_is_the_date():
+    assert daily_seed(date(2026, 11, 25)) == 20261125
+
+
+def test_daily_expedition_uses_todays_seed(expedition):
+    expedition.reset(daily=True)
+    assert expedition.seed == daily_seed()
+    assert expedition.to_dict()["expedition"]["daily"] is True
+    expedition.reset()
+    assert expedition.to_dict()["expedition"]["daily"] is False
+
+
+# --- Bitácora y legendarias -----------------------------------------------------
+
+def test_finishing_an_expedition_updates_the_logbook(expedition, progress):
+    expedition.floor = 2
+    expedition.game.score = 900
+    expedition.set_curses(["prisa"])
+    expedition.moves_left = 1
+    expedition.game.grid = [[2, 0, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    expedition.move("right")
+    assert progress.data["expeditions"] == 1
+    assert progress.data["wins"] == 0
+    assert progress.data["best_score"] == 900
+    assert expedition.to_dict()["expedition"]["progress"]["expeditions"] == 1
+
+
+def test_winning_counts_as_a_victory(expedition, progress):
+    expedition.floor = len(EXPEDITION_TARGETS)
+    reach_target(expedition)
+    assert progress.data["wins"] == 1
+    assert progress.data["best_floor"] == len(EXPEDITION_TARGETS)
+
+
+def test_reaching_a_new_floor_is_recorded_at_once(progress):
+    progress.data = {}
+    exp = Expedition(storage=FakeHighscoreStorage(), seed=7, progress=progress)
+    open_shop(exp)
+    exp.shop_action("leave")
+    assert progress.data["best_floor"] == 2
+
+
+def test_legendaries_are_locked_until_the_unlock_floor():
+    locked = Expedition(storage=FakeHighscoreStorage(), seed=7,
+                        progress=FakeProgressStorage({"best_floor": 2}))
+    drawn = locked._draw_cards(len(CARDS))
+    assert all(CARDS[card].rarity != "legendaria" for card in drawn)
+    assert locked.to_dict()["expedition"]["progress"]["legends_unlocked"] is False
+
+
+def test_legendaries_unlock_when_the_floor_is_reached():
+    progress = FakeProgressStorage({"best_floor": LEGEND_UNLOCK_FLOOR - 1})
+    exp = Expedition(storage=FakeHighscoreStorage(), seed=7, progress=progress)
+    exp.floor = LEGEND_UNLOCK_FLOOR - 1
+    open_shop(exp)
+    exp.shop_action("leave")
+    assert "fenix" in exp._draw_cards(len(CARDS))

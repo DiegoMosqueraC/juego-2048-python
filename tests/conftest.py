@@ -17,6 +17,12 @@ from logic import Game2048
 from web_ui import create_server
 
 
+@pytest.fixture(autouse=True)
+def isolated_data_dir(tmp_path, monkeypatch):
+    """Ninguna prueba lee ni escribe el récord o la bitácora reales del jugador."""
+    monkeypatch.setenv("JUEGO2048_DATA_DIR", str(tmp_path))
+
+
 @pytest.fixture
 def storage():
     """Récord en memoria (doble de prueba "fake"), nuevo para cada prueba."""
