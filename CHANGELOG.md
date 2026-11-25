@@ -11,12 +11,14 @@ identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLO
   elegir, 3 maldiciones, usos de deshacer limitados y semilla repetible.
 - Piedras en el tablero: celdas que no se mueven ni se fusionan (`slide_line`).
 - Ruta `POST /api/choose` y opciones `--clasico` y `--semilla`.
+- Selector de modo en la interfaz web (Expedición o Clásico) y ruta `POST /api/mode`;
+  el servidor guarda una partida por modo, así cambiar no borra el progreso.
 - Barra de la expedición, cartas de bendición y piedras en la interfaz web.
-- 65 pruebas nuevas (`test_expedicion.py`, `test_piedras.py`, API y `main.py`).
+- 72 pruebas nuevas (`test_expedicion.py`, `test_piedras.py`, API y `main.py`).
 
 ### Cambiado
-- La interfaz web abre en el modo expedición; el 2048 clásico sigue con `--clasico`
-  y en el modo terminal.
+- La interfaz web abre en el modo expedición; `--clasico` la abre en el modo clásico.
+- El estado de la API incluye el campo `mode`.
 
 ## [2.0.0] - 2026-10-21
 

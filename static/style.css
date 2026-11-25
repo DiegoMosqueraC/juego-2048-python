@@ -545,6 +545,53 @@ kbd {
 }
 
 /* --------------------------------------------------------------------------
+   Selector de modo
+   -------------------------------------------------------------------------- */
+.mode-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-md);
+}
+
+.mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.mode-btn:hover {
+    background: var(--secondary);
+}
+
+.mode-btn[aria-pressed="true"] {
+    color: var(--text-primary);
+    background: var(--secondary);
+    border-color: var(--primary);
+}
+
+.mode-name {
+    font-size: 0.95rem;
+    font-weight: 800;
+}
+
+.mode-hint {
+    font-size: 0.72rem;
+}
+
+/* --------------------------------------------------------------------------
    Modo expedición
    -------------------------------------------------------------------------- */
 .expedition-bar {

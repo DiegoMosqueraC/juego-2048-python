@@ -66,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help=f"lado del tablero, de 2 a 8 (por defecto "
                              f"{DEFAULT_BOARD_SIZE})")
     parser.add_argument("--clasico", action="store_true",
-                        help="jugar el 2048 clásico en la web en vez de la expedición")
+                        help="abrir la web con el modo clásico seleccionado")
     parser.add_argument("--semilla", type=_argument_type(validate_seed),
                         help="repetir la expedición de esa semilla")
     return parser

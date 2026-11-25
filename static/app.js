@@ -150,7 +150,6 @@ class GameClient {
             best: document.getElementById("best-score"),
             bubbles: document.getElementById("score-bubble-container"),
             goal: document.getElementById("goal-tile"),
-            finalScore: document.getElementById("final-score-text"),
             toast: document.getElementById("toast"),
             announcer: document.getElementById("announcer"),
             undo: document.getElementById("btn-undo"),
@@ -171,6 +170,10 @@ class GameClient {
         this.busy = false;
         this.pendingDirection = null;
         this.focusBeforeModal = null;
+        // Textos originales de los diálogos: la expedición los cambia y el
+        // modo clásico debe recuperarlos al volver.
+        this.dialogDefaults = ["win-title", "win-text", "over-title", "over-text"].map(
+            (id) => [id, document.getElementById(id).cloneNode(true)]);
 
         this.setupKeyboard();
         this.setupButtons();
@@ -291,6 +294,20 @@ class GameClient {
         }
     }
 
+    /** Cambia de modo; cada modo conserva su partida en el servidor. */
+    async switchMode(mode) {
+        if (this.busy || (this.state && this.state.mode === mode)) {
+            return;
+        }
+        const result = await this.request("/api/mode", { mode });
+        if (result && result.ok) {
+            this.applyState(result.data, { appear: true });
+            this.sound.playMove();
+            const name = mode === "expedition" ? "Expedición" : "Clásico";
+            this.announce(`Modo ${name}. Puntuación: ${result.data.score}.`);
+        }
+    }
+
     async continuePlaying() {
         const result = await this.request("/api/continue", {});
         if (result && (result.ok || result.status === 409)) {
@@ -314,6 +331,9 @@ class GameClient {
         this.state = state;
         this.updateScores(state, options.move);
         this.renderTiles(state, options);
+        document.querySelectorAll(".mode-btn").forEach((button) => {
+            button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
+        });
         this.updateExpedition(state);
         this.updateDialogs(previousStatus, state, firstLoad);
         this.el.undo.disabled = !state.can_undo;
@@ -326,6 +346,7 @@ class GameClient {
         this.el.expeditionBar.classList.toggle("hidden", !info);
         document.querySelector(".expedition-help").classList.toggle("hidden", !info);
         if (!info) {
+            this.el.undo.title = "Deshacer jugada (U)";
             return;
         }
         const set = (id, text) => { document.getElementById(id).textContent = text; };
@@ -459,10 +480,13 @@ class GameClient {
 
     /** Muestra u oculta los diálogos de victoria y fin, y anuncia los cambios. */
     updateDialogs(previousStatus, state, firstLoad) {
-        this.el.finalScore.textContent = state.score.toLocaleString("es-CO");
         // Sin historial (p. ej., tras recargar la página) no hay jugada que deshacer.
         document.getElementById("btn-over-undo").disabled = !state.can_undo;
         this.updateDialogTexts(state);
+        if (!state.expedition) {
+            // Va después de updateDialogTexts, que restaura el texto original.
+            document.getElementById("final-score-text").textContent = state.score.toLocaleString("es-CO");
+        }
         this.toggleModal("win", state.status === "won");
         this.toggleModal("over", state.status === "game_over");
         this.toggleModal("choose", state.status === "choosing");
@@ -487,6 +511,10 @@ class GameClient {
         const set = (id, text) => { document.getElementById(id).textContent = text; };
         document.getElementById("btn-continue").classList.toggle("hidden", Boolean(info));
         if (!info) {
+            this.dialogDefaults.forEach(([id, original]) => {
+                document.getElementById(id).replaceChildren(
+                    ...original.cloneNode(true).childNodes);
+            });
             return;
         }
         set("choose-badge", `PISO ${info.floor} SUPERADO`);
@@ -605,6 +633,9 @@ class GameClient {
             const next = current === "dark" ? "light" : "dark";
             preferences.set("2048_theme", next);
             this.applyTheme(next);
+        });
+        document.querySelectorAll(".mode-btn").forEach((button) => {
+            button.addEventListener("click", () => this.switchMode(button.dataset.mode));
         });
         document.querySelectorAll(".dpad-btn").forEach((button) => {
             button.addEventListener("click", () => this.move(button.dataset.dir));

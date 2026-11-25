@@ -3,10 +3,11 @@
 [![CI](https://github.com/DiegoMosqueraC/juego-2048-python/actions/workflows/ci.yml/badge.svg)](https://github.com/DiegoMosqueraC/juego-2048-python/actions/workflows/ci.yml)
 
 Juego basado en **2048** (Cirulli, 2014) escrito en Python con la biblioteca
-estándar: no necesita instalar paquetes para jugar. La interfaz web abre en el
-**modo expedición**, una variante tipo *roguelike* en la que cada partida es
-distinta; el 2048 clásico sigue disponible en la web y en el **modo terminal**,
-que funciona en Linux, macOS y Windows.
+estándar: no necesita instalar paquetes para jugar. En la interfaz web eliges el
+modo con el selector de la parte superior: **Expedición**, una variante tipo
+*roguelike* en la que cada partida es distinta, o **Clásico**. Cada modo conserva
+su propia partida al cambiar de uno a otro. El **modo terminal** juega el clásico
+y funciona en Linux, macOS y Windows.
 
 Este repositorio es también el producto de la asignatura *Codificación y Pruebas
 del Software*: contiene la versión base recibida, el registro de fallos, las
@@ -71,7 +72,7 @@ Opciones adicionales:
 | :--- | :--- | :--- |
 | `--port N`, `-p N` | Puerto del servidor web (1-65535). Si está ocupado se prueba el siguiente. | 8080 |
 | `--size N`, `-s N` | Lado del tablero, de 2 a 8. | 4 |
-| `--clasico` | La web abre el 2048 clásico en vez de la expedición. | Expedición |
+| `--clasico` | La web abre con el modo Clásico seleccionado (se puede cambiar en la página). | Expedición |
 | `--semilla N` | Repite la expedición de esa semilla (entero ≥ 0). | Al azar |
 | Variable `JUEGO2048_DATA_DIR` | Carpeta donde se guarda `highscore.json`. | Carpeta del programa |
 
@@ -118,9 +119,10 @@ static/ (index.html, style.css, app.js, game-utils.js)
 | `POST /api/undo` | `{}` | Estado + `undone` |
 | `POST /api/reset` | `{}` | Estado de la partida nueva |
 | `POST /api/continue` | `{}` | Estado, o `409` si no hay una victoria pendiente |
+| `POST /api/mode` | `{"mode": "classic"}` o `{"mode": "expedition"}` | Estado de la partida de ese modo; `400` si el modo no existe |
 | `POST /api/choose` | `{"index": 0}` | Estado del piso siguiente; `400` si el índice no es 0, 1 o 2; `409` si no hay elección pendiente |
 
-En el modo expedición el estado incluye `mode: "expedition"` y un objeto
+Todo estado incluye `mode` (`"classic"` o `"expedition"`). En la expedición trae además un objeto
 `expedition` con el piso, el objetivo, la maldición, las jugadas restantes, los
 usos de deshacer, el multiplicador, la semilla y las bendiciones ofrecidas. Las
 piedras llegan en `grid` con el valor `-1`.
@@ -144,8 +146,8 @@ bandit -r . -x ./tests,./docs           # análisis de seguridad
 | Advertencias de flake8 | 63 | 0 |
 | Hallazgos de bandit | 4 | 0 |
 | Complejidad ciclomática de `move()` | 13 | 3 |
-| Pruebas automatizadas | 12 | 348 (338 Python + 10 JavaScript) |
-| Cobertura de sentencias y ramas | 40 % | 97,2 % |
+| Pruebas automatizadas | 12 | 355 (345 Python + 10 JavaScript) |
+| Cobertura de sentencias y ramas | 40 % | 97,3 % |
 
 El flujo [`.github/workflows/ci.yml`](.github/workflows/ci.yml) ejecuta los mismos
 pasos en Ubuntu y Windows con Python 3.10 y 3.12 en cada *push* o *pull request*.

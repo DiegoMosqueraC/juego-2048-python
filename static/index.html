@@ -32,6 +32,18 @@
             </div>
         </header>
 
+        <!-- Selector de modo: cada modo conserva su propia partida -->
+        <div class="mode-switch" role="group" aria-label="Modo de juego">
+            <button class="mode-btn" data-mode="expedition" aria-pressed="false">
+                <span class="mode-name">Expedición</span>
+                <span class="mode-hint">Pisos, bendiciones y maldiciones</span>
+            </button>
+            <button class="mode-btn" data-mode="classic" aria-pressed="false">
+                <span class="mode-name">Clásico</span>
+                <span class="mode-hint">Llega al 2048 sin sorpresas</span>
+            </button>
+        </div>
+
         <!-- Barra de herramientas -->
         <div class="toolbar">
             <p class="instructions">¡Une los números para llegar a <strong id="goal-tile">2048</strong>!</p>
