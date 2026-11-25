@@ -1,5 +1,7 @@
 # Lista de chequeo del examen final
 
+Versión diligenciada en el formato de la FESC: [Lista_de_Chequeo_Examen_Final_Juego2048.pdf](entregas/Lista_de_Chequeo_Examen_Final_Juego2048.pdf).
+
 Estado: **C** cumple, **P** parcial, **N** no cumple. Rutas relativas a la raíz del
 repositorio. Cada evidencia está enlazada desde el [informe final](INFORME_FINAL_EXAMEN.md).
 
@@ -12,7 +14,7 @@ repositorio. Cada evidencia está enlazada desde el [informe final](INFORME_FINA
 | B3 Modularidad y SOLID | C | `docs/ARQUITECTURA.md` (secciones 3 y 4) |
 | B4 Codificación defensiva y seguridad | C | `docs/EVIDENCIAS_EXAMEN.md` (B4); `validation.py`; `bandit_secretos.txt` |
 | B5 TDD rojo-verde-refactor | C | `f3b76d8` (rojo), `4ad303a` (verde), `5c865ce` (refactor); `docs/evidencias/02_tdd_fase_roja/`, `03_tdd_fase_verde/` |
-| B6 Control de versiones | C | `git log --oneline --graph`: más de 70 commits, Conventional Commits, `main`, `develop`, `feat/*`, `fix/*`, `docs/*` |
+| B6 Control de versiones | C | `git log --oneline --graph`: 70 commits hasta el tag `examen-final`, Conventional Commits, `main`, `develop`, `feat/*`, `fix/*`, `docs/*` |
 | B7 Mantenimiento | C | `docs/REGISTRO_FALLOS.md` (23 fallos); cambio evolutivo EV-01 en `docs/EVIDENCIAS_EXAMEN.md` |
 
 ## Pruebas de software con xUnit
@@ -33,7 +35,7 @@ repositorio. Cada evidencia está enlazada desde el [informe final](INFORME_FINA
 | Ítem | Estado | Evidencia |
 | --- | :---: | --- |
 | D1 Plan de pruebas | C | `docs/talleres/Taller_Unidad3_Proceso_de_Prueba_Juego2048.docx` (PP-2048-v1.0); recursos en `docs/EVIDENCIAS_EXAMEN.md` (D1) |
-| D2 Esfuerzo y priorización | P | Estimación y prioridad por riesgo en el taller; faltan las horas reales (`docs/EVIDENCIAS_EXAMEN.md`, D2) |
+| D2 Esfuerzo y priorización | P | Estimación y prioridad por riesgo en el taller; horas reales por diligenciar en `docs/entregas/Registro_de_Horas_Reales_Juego2048.docx` |
 | D3 Métricas y criterios de salida | C | Taller de proceso de prueba, sección de métricas |
 | D4 Qué se automatiza | C | `docs/talleres/` y `Documentacion/Taller_Unidad3_Automatizacion_de_Pruebas_Juego2048.docx` |
 | D5 Pipeline CI | C | `.github/workflows/ci.yml` |
