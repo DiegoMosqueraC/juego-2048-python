@@ -56,7 +56,7 @@ CARDS = {
     "interes": Card("Interés", "Al superar un piso ganas 1 de oro por cada 5 que "
                     "guardes (máx. 5).", "rara"),
     "expansion": Card("Expansión", "El tablero crece una fila y una columna "
-                      "(máx. 6×6).", "legendaria"),
+                      "(máx. 7×7).", "legendaria"),
     "fenix": Card("Fénix", "Si te quedas sin jugadas, se borran los 2 y los 4 y "
                   "sigues (una vez).", "legendaria"),
 }
@@ -77,6 +77,10 @@ CURSES = {
                   "un lado."),
 }
 GUARDIAN_FLOORS = (3, 6)
+# Desde este piso ya no sale «Calma»: siempre hay una maldición de verdad.
+CALM_UNTIL_FLOOR = 3
+# La mina se ensancha sola en los pisos grandes: piso -> lado mínimo del tablero.
+BOARD_GROWTH = {5: 5, 6: 6}
 GUARDIAN_CURSES = 2
 QUAKE_EVERY = 8
 
@@ -90,7 +94,7 @@ GREED_BONUS = 0.5
 CLOVER_BONUS = 0.15
 STREAK_BONUS = 0.1
 MAX_STREAK_STEPS = 10
-MAX_BOARD_EXPANSION = 6
+MAX_BOARD_EXPANSION = 7
 
 
 class Expedition:
@@ -342,9 +346,14 @@ class Expedition:
         self.floor_moves = 0
         self._floor_start_score = self.game.score
         self.game.clear_history()
+        while self.game.size < BOARD_GROWTH.get(self.floor, 0):
+            self._expand_board()
+            self.event = "crece"
+        harmful = [curse for curse in CURSES if curse != "calma"]
         if self.floor in GUARDIAN_FLOORS:
-            harmful = [curse for curse in CURSES if curse != "calma"]
             curses = self._rng.sample(harmful, GUARDIAN_CURSES)
+        elif self.floor > CALM_UNTIL_FLOOR:
+            curses = [self._rng.choice(harmful)]
         else:
             curses = [self._rng.choice(list(CURSES))]
         if self.shield:

@@ -12,6 +12,8 @@ import pytest
 from config import EXPEDITION_TARGETS, STONE
 from doubles import FakeHighscoreStorage
 from roguelike import (
+    BOARD_GROWTH,
+    CALM_UNTIL_FLOOR,
     CARD_PRICES,
     CARDS,
     CURSES,
@@ -528,3 +530,39 @@ def test_to_dict_reports_the_expedition(expedition):
     assert info["choices"] == []
     assert info["shop"] == {"open": False, "items": [], "reroll_price": REROLL_PRICE}
     assert data["can_undo"] is False
+
+
+# --- Crecimiento del tablero y dificultad por piso ----------------------------------
+
+def go_down_to(exp, floor):
+    exp.floor = floor - 1
+    open_shop(exp)
+    exp.shop_action("leave")
+
+
+def test_the_mine_widens_on_the_big_floors(expedition):
+    for floor, size in BOARD_GROWTH.items():
+        go_down_to(expedition, floor)
+        assert expedition.game.size == size
+        assert expedition.to_dict()["expedition"]["event"] == "crece"
+
+
+def test_growth_keeps_the_tiles(expedition):
+    expedition.game.grid = [[64, 0, 0, 0], EMPTY_ROW, EMPTY_ROW, [0, 0, 0, 8]]
+    floor = min(BOARD_GROWTH)
+    go_down_to(expedition, floor)
+    assert expedition.game.grid[0][0] == 64
+    assert expedition.game.grid[3][3] in (8, S)
+
+
+def test_growth_does_not_shrink_an_expanded_board(expedition):
+    while expedition.game.size < MAX_BOARD_EXPANSION:
+        expedition.take_card("expansion")
+    go_down_to(expedition, min(BOARD_GROWTH))
+    assert expedition.game.size == MAX_BOARD_EXPANSION
+
+
+def test_no_calm_floors_after_the_early_floors(expedition):
+    for _ in range(40):
+        go_down_to(expedition, CALM_UNTIL_FLOOR + 1)
+        assert "calma" not in expedition.curses
