@@ -4,6 +4,15 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 proyecto usa [versionado semántico](https://semver.org/lang/es/). Los
 identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLOS.md).
 
+## [2.4.0] - 2026-11-25
+
+### Cambiado
+- La interfaz cabe en pantalla: en computador, panel a la izquierda y tablero a la
+  derecha del alto de la ventana; en celular, el tablero va justo después de los
+  botones y la expedición debajo.
+- La mina se ensancha sola: 5×5 en el piso de 1024 y 6×6 en el de 2048, con aviso.
+- Expansión llega hasta 7×7 y desde el piso 4 ya no sale la maldición Calma.
+
 ## [2.3.0] - 2026-11-25
 
 ### Agregado (mantenimiento perfectivo)

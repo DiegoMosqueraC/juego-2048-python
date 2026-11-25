@@ -27,7 +27,8 @@ const EVENT_MS = 2600;
 const EVENT_TEXTS = {
     terremoto: "¡Terremoto! El tablero se sacudió solo.",
     fenix: "¡El Fénix te salvó! Se borraron los 2 y los 4.",
-    escudo: "El escudo anuló las maldiciones de este piso."
+    escudo: "El escudo anuló las maldiciones de este piso.",
+    crece: "¡La mina se ensancha! El tablero creció una fila y una columna."
 };
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const CONNECTION_ERROR = "Sin conexión con el servidor de Python. "

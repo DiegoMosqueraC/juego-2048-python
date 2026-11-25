@@ -32,8 +32,10 @@ juega igual: las cartas, las maldiciones y la tienda cambian en cada una.
 4. **Carta gratis y tienda.** Se elige 1 de 3 cartas gratis; las otras dos quedan
    en la tienda, donde se compran con oro o se renueva la oferta (2 de oro).
 5. **Pisos guardianes.** Los pisos 3 y 6 traen dos maldiciones a la vez; superar
-   el 3 ofrece solo cartas raras o legendarias.
-6. **Deshacer** gasta usos: empiezas con uno. Si el tablero se bloquea o se acaban
+   el 3 ofrece solo cartas raras o legendarias. Desde el piso 4 ya no sale *Calma*.
+6. **La mina se ensancha.** Al llegar al piso de 1024 el tablero pasa a 5×5 y al de
+   2048 a 6×6; la carta *Expansión* puede llevarlo hasta 7×7.
+7. **Deshacer** gasta usos: empiezas con uno. Si el tablero se bloquea o se acaban
    las jugadas de *Prisa*, la expedición termina.
 
 | Carta | Rareza (precio) | Efecto |
@@ -47,7 +49,7 @@ juega igual: las cartas, las maldiciones y la tienda cambian en cada una.
 | Escudo | Rara (7) | Anula las maldiciones del próximo piso. |
 | Alquimia | Rara (7) | Convierte todas las fichas de 4 en 8. |
 | Interés | Rara (7) | Al superar un piso, 1 de oro por cada 5 guardados (máx. 5). |
-| Expansión | Legendaria (12) | El tablero crece una fila y una columna (máx. 6×6). |
+| Expansión | Legendaria (12) | El tablero crece una fila y una columna (máx. 7×7). |
 | Fénix | Legendaria (12) | Si te quedas sin jugadas, borra los 2 y los 4 y sigues (una vez). |
 
 Las comunes salen 6 veces más que las legendarias y las raras 3 veces más.
