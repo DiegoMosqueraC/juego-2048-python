@@ -27,6 +27,7 @@ from config import (
     INITIAL_TILE_COUNT,
     MAX_UNDO_HISTORY,
     PROBABILITY_OF_FOUR,
+    STONE,
     WINNING_TILE,
 )
 from storage import HighscoreStorage, JsonHighscoreStorage
@@ -156,6 +157,32 @@ def slide_and_merge_line(line: Sequence[int]) -> LineResult:
     return LineResult(tuple(values), points, tuple(moves), tuple(merged_targets))
 
 
+def slide_line(line: Sequence[int]) -> LineResult:
+    """
+    Como slide_and_merge_line, pero las piedras (STONE) se quedan fijas y parten
+    la línea en tramos que se desplazan y fusionan por separado.
+
+    Ejemplo: [2, STONE, 0, 2] -> valores (2, STONE, 2, 0).
+    """
+    values: list[int] = []
+    moves: list[LineMove] = []
+    merged_targets: list[int] = []
+    points = 0
+    start = 0
+    stones = [index for index, value in enumerate(line) if value == STONE]
+    for end in stones + [len(line)]:
+        part = slide_and_merge_line(line[start:end])
+        values.extend(part.values)
+        points += part.points
+        moves.extend(LineMove(m.source + start, m.target + start, m.merged)
+                     for m in part.moves)
+        merged_targets.extend(target + start for target in part.merged_targets)
+        if end < len(line):
+            values.append(STONE)
+        start = end + 1
+    return LineResult(tuple(values), points, tuple(moves), tuple(merged_targets))
+
+
 # -----------------------------------------------------------------------------
 # Partida
 # -----------------------------------------------------------------------------
@@ -218,6 +245,9 @@ class Game2048:
         self.won: bool = False
         self.keep_playing_after_win: bool = False
         self.game_over: bool = False
+        # El modo expedición los cambia con sus bendiciones.
+        self.points_multiplier: float = 1.0
+        self.probability_of_four: float = PROBABILITY_OF_FOUR
         # Cada elemento guarda (tablero, puntuación) previos a una jugada.
         self._history: deque = deque(maxlen=MAX_UNDO_HISTORY)
 
@@ -279,7 +309,7 @@ class Game2048:
         if not empty_cells:
             return None
         row, col = self._rng.choice(empty_cells)
-        value = 4 if self._rng.random() < PROBABILITY_OF_FOUR else 2
+        value = 4 if self._rng.random() < self.probability_of_four else 2
         self.grid[row][col] = value
         return (row, col, value)
 
@@ -303,11 +333,12 @@ class Game2048:
 
         self._history.append(([row[:] for row in self.grid], self.score))
         self.grid = new_grid
-        self.score += result.points
+        points = int(result.points * self.points_multiplier)
+        self.score += points
         self._update_highscore()
         new_tile = self.add_random_tile()
         self._update_status()
-        return replace(result, new_tile=new_tile)
+        return replace(result, points=points, new_tile=new_tile)
 
     def _compute_move(self, direction: str) -> tuple[Grid, MoveResult]:
         """Calcula el tablero resultante sin modificar el estado actual."""
@@ -319,7 +350,7 @@ class Game2048:
         for index in range(self.size):
             cells = self._line_cells(direction, index)
             line = [self.grid[row][col] for row, col in cells]
-            line_result = slide_and_merge_line(line)
+            line_result = slide_line(line)
             for (row, col), value in zip(cells, line_result.values):
                 new_grid[row][col] = value
             points += line_result.points
@@ -369,10 +400,12 @@ class Game2048:
             return True
         last = self.size - 1
         horizontal = any(
-            row[col] == row[col + 1] for row in self.grid for col in range(last)
+            row[col] == row[col + 1] != STONE
+            for row in self.grid
+            for col in range(last)
         )
         vertical = any(
-            self.grid[row][col] == self.grid[row + 1][col]
+            self.grid[row][col] == self.grid[row + 1][col] != STONE
             for row in range(last)
             for col in range(self.size)
         )
@@ -391,6 +424,10 @@ class Game2048:
         return True
 
     # --- Deshacer ----------------------------------------------------------------
+
+    def clear_history(self) -> None:
+        """Vacía el historial: lo anterior a este punto ya no se puede deshacer."""
+        self._history.clear()
 
     def undo(self) -> bool:
         """
@@ -429,7 +466,8 @@ class Game2048:
     def __str__(self) -> str:
         """Tablero en texto, alineado según la ficha más larga."""
         width = max(4, len(str(self.max_tile())))
+        symbols = {0: "·", STONE: "■"}
         return "\n".join(
-            " ".join(str(value or "·").rjust(width) for value in row)
+            " ".join(symbols.get(value, str(value)).rjust(width) for value in row)
             for row in self.grid
         )

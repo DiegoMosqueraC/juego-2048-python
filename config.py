@@ -14,6 +14,8 @@ WINNING_TILE = 2048
 INITIAL_TILE_COUNT = 2
 # Probabilidad de que una ficha nueva sea 4 en lugar de 2 (regla del 2048 original).
 PROBABILITY_OF_FOUR = 0.1
+# Celda bloqueada del modo expedición: no se mueve ni se fusiona.
+STONE = -1
 # Jugadas que se pueden deshacer; limita el consumo de memoria del historial.
 MAX_UNDO_HISTORY = 20
 
