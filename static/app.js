@@ -62,6 +62,40 @@ const preferences = {
     }
 };
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+const NUMBER_TWEEN_MS = 420;
+const COINS_PER_RAIN = 14;
+
+/** Crea un <svg> que usa un icono del sprite de index.html. */
+function icon(name, className = "icon") {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", className);
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS(SVG_NS, "use");
+    use.setAttribute("href", `#${name}`);
+    svg.appendChild(use);
+    return svg;
+}
+
+/** Elemento con clase y texto opcionales. */
+function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) {
+        node.className = className;
+    }
+    if (text !== undefined) {
+        node.textContent = text;
+    }
+    return node;
+}
+
+/** Reinicia una animación CSS de clase `name` aunque ya se esté mostrando. */
+function replayClass(node, name) {
+    node.classList.remove(name);
+    void node.offsetWidth; // Fuerza al navegador a notar el cambio.
+    node.classList.add(name);
+}
+
 function prefersReducedMotion() {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -140,6 +174,16 @@ class SoundEffects {
     playGameOver() {
         this._tone({ type: "sawtooth", from: 220, to: 110, volume: 0.18, duration: 0.4 });
     }
+
+    /** Dos notas agudas y cortas, como monedas que chocan. */
+    playCoin() {
+        this._tone({ type: "square", from: 988, volume: 0.08, duration: 0.08 });
+        this._tone({ type: "square", from: 1319, volume: 0.08, duration: 0.22, delay: 0.07 });
+    }
+
+    playCard() {
+        this._tone({ type: "triangle", from: 420, to: 840, volume: 0.15, duration: 0.12 });
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -162,7 +206,8 @@ class GameClient {
             soundButton: document.getElementById("btn-sound"),
             themeButton: document.getElementById("btn-theme"),
             expeditionBar: document.getElementById("expedition-bar"),
-            blessingCards: document.getElementById("blessing-cards")
+            blessingCards: document.getElementById("blessing-cards"),
+            fx: document.getElementById("fx-layer")
         };
         this.modals = {
             win: document.getElementById("modal-win"),
@@ -176,6 +221,9 @@ class GameClient {
         this.busy = false;
         this.pendingDirection = null;
         this.focusBeforeModal = null;
+        // Valores mostrados en pantalla: se animan hasta el valor real.
+        this.shown = { score: 0, gold: 0 };
+        this.offerKey = "";
         // Textos originales de los diálogos: la expedición los cambia y el
         // modo clásico debe recuperarlos al volver.
         this.dialogDefaults = ["win-title", "win-text", "over-title", "over-text"].map(
@@ -240,6 +288,7 @@ class GameClient {
                 await this.animateSlide(result.data.tile_moves);
                 this.playMoveSound(result.data);
                 this.applyState(result.data, { move: result.data });
+                this.playMoveEffects(result.data);
                 this.announceMove(direction, result.data);
             }
         } finally {
@@ -260,7 +309,7 @@ class GameClient {
         try {
             const result = await this.request("/api/undo", {});
             if (result && result.ok && result.data.undone) {
-                this.applyState(result.data, {});
+                this.applyState(result.data, { undo: true });
                 this.sound.playMove();
                 this.announce(`Jugada deshecha. Puntuación: ${result.data.score}.`);
             }
@@ -294,7 +343,7 @@ class GameClient {
         const result = await this.request("/api/choose", { index });
         if (result && result.ok) {
             this.applyState(result.data, {});
-            this.sound.playMerge(64);
+            this.sound.playCard();
             this.announce(`Carta tomada. Tienda abierta: tienes ${result.data.expedition.gold} de oro.`);
         }
     }
@@ -316,7 +365,7 @@ class GameClient {
             const curses = info.curses.map((curse) => `${curse.name}: ${curse.description}`).join(" ");
             this.announce(`Piso ${info.floor}, objetivo ${info.target}. ${curses}`);
         } else {
-            this.sound.playMerge(128);
+            this.sound.playCoin();
             this.announce(`Te quedan ${info.gold} de oro.`);
         }
     }
@@ -352,6 +401,10 @@ class GameClient {
     applyState(state, options) {
         const firstLoad = this.state === null;
         const previousStatus = firstLoad ? state.status : this.state.status;
+        const cardEffect = !options.move && !options.appear && !options.undo;
+        if (!firstLoad && cardEffect && state.size === this.state.size) {
+            this.puffRemovedTiles(this.state.grid, state.grid);
+        }
         if (state.size !== this.size) {
             this.buildGrid(state.size);
         }
@@ -367,84 +420,123 @@ class GameClient {
         this.el.goal.textContent = state.expedition ? state.expedition.target : state.winning_tile;
     }
 
-    /** Muestra la barra del modo expedición (piso, maldición, recursos y semilla). */
+    /** Muestra la barra del modo expedición (piso, recursos, maldiciones y mazo). */
     updateExpedition(state) {
         const info = state.expedition;
         this.el.expeditionBar.classList.toggle("hidden", !info);
         document.querySelector(".expedition-help").classList.toggle("hidden", !info);
+        this.el.board.classList.toggle("fog", Boolean(info) && info.curses.some((c) => c.id === "niebla"));
         if (!info) {
             this.el.undo.title = "Deshacer jugada (U)";
             return;
         }
         const set = (id, text) => { document.getElementById(id).textContent = text; };
         const number = (value) => value.toLocaleString("es-CO");
-        set("exp-floor", `${info.floor}/${info.floors}${info.guardian ? " ☠" : ""}`);
+        set("exp-floor", `${info.floor}/${info.floors}`);
         set("exp-target", info.target);
-        set("exp-gold", info.gold);
         set("exp-streak", `×${number(info.streak_bonus)}`);
-        set("exp-curse", info.curses.map((curse) => curse.name).join(" + "));
-        set("exp-curse-text", info.curses.map((curse) => curse.description).join(" "));
         set("exp-undo", info.undo_charges);
         set("exp-multiplier", `×${number(info.multiplier)}`);
         set("exp-seed", info.seed);
-        set("exp-deck", info.deck.length === 0 ? "Mazo vacío: gana cartas al superar pisos."
-            : "Mazo: " + info.deck.map((card) => (card.count > 1 ? `${card.name} ×${card.count}` : card.name)).join(" · "));
         this.el.expeditionBar.classList.toggle("guardian", info.guardian);
-        const cursed = info.curses.some((curse) => curse.id !== "calma");
-        document.getElementById("exp-curse-box").classList.toggle("cursed", cursed);
-        this.el.board.classList.toggle("fog", info.curses.some((curse) => curse.id === "niebla"));
-        this.showEvent(info.event);
+
+        // Oro: cuenta hacia arriba y la moneda gira cuando sube.
+        const goldBox = document.getElementById("exp-gold-box");
+        if (info.gold > this.shown.gold) {
+            replayClass(goldBox, "gain");
+        }
+        this.tweenNumber(document.getElementById("exp-gold"), "gold", info.gold);
+
+        // Racha: la llama crece con --heat y arde desde 3 fusiones seguidas.
+        const streakBox = document.getElementById("exp-streak-box");
+        streakBox.style.setProperty("--heat", Math.min(info.streak / 10, 1));
+        streakBox.classList.toggle("hot", info.streak >= 3);
+
         const movesBox = document.getElementById("exp-moves-box");
         movesBox.classList.toggle("hidden", info.moves_left === null);
         movesBox.classList.toggle("low", info.moves_left !== null && info.moves_left <= 10);
         set("exp-moves", info.moves_left === null ? "" : info.moves_left);
-        this.el.undo.title = `Deshacer jugada (U) · quedan ${info.undo_charges} usos`;
+
+        document.getElementById("exp-curse-list").replaceChildren(...info.curses.map((curse) => {
+            const chip = el("li", `chip ${curse.id === "calma" ? "chip-calm" : "chip-curse"}`);
+            chip.title = curse.description;
+            chip.append(icon(`i-curse-${curse.id}`), curse.name);
+            return chip;
+        }));
+        set("exp-curse-text", info.curses.map((curse) => curse.description).join(" "));
+        document.getElementById("exp-deck").replaceChildren(...info.deck.map((card) => {
+            const chip = el("li", `chip chip-${card.rarity}`);
+            chip.title = card.name;
+            chip.append(icon(`i-card-${card.id}`), card.name);
+            if (card.count > 1) {
+                chip.append(el("span", "chip-count", `×${card.count}`));
+            }
+            return chip;
+        }));
+        this.el.undo.title = `Deshacer jugada (U): quedan ${info.undo_charges} usos`;
+        this.showEvent(info.event);
         this.renderOffer(state);
     }
 
-    /** Aviso breve de un suceso de la expedición (terremoto, fénix, escudo). */
+    /** Aviso breve de un suceso (terremoto, fénix, escudo) con su efecto en el tablero. */
     showEvent(event) {
         const banner = document.getElementById("exp-event");
         clearTimeout(this.eventTimer);
         banner.classList.toggle("hidden", !event);
-        if (event) {
-            banner.textContent = EVENT_TEXTS[event];
-            this.announce(EVENT_TEXTS[event]);
-            this.eventTimer = setTimeout(() => banner.classList.add("hidden"), EVENT_MS);
+        if (!event) {
+            return;
         }
+        banner.textContent = EVENT_TEXTS[event];
+        this.announce(EVENT_TEXTS[event]);
+        replayClass(this.el.board, event === "terremoto" ? "shake" : `flash-${event}`);
+        this.eventTimer = setTimeout(() => banner.classList.add("hidden"), EVENT_MS);
     }
 
     /** Cartas para elegir gratis o, después, la tienda con precios en oro. */
     renderOffer(state) {
         const info = state.expedition;
         const shop = state.status === "shop";
+        const offering = shop || state.status === "choosing";
         const items = shop ? info.shop.items : info.choices;
+        // Solo se vuelven a repartir si cambió algo: así la animación no se repite.
+        const key = JSON.stringify([state.status, info.gold, items.map((item) => item.id)]);
+        if (!offering || key === this.offerKey) {
+            this.offerKey = offering ? key : "";
+            return;
+        }
+        this.offerKey = key;
         const set = (id, text) => { document.getElementById(id).textContent = text; };
         if (shop) {
-            set("choose-badge", "TIENDA");
+            set("choose-badge", "Tienda");
             set("choose-title", `Tienes ${info.gold} de oro`);
             set("choose-text", items.length > 0
                 ? "Compra las cartas que no elegiste o renueva la oferta."
                 : "No quedan cartas: renueva la oferta o sigue bajando.");
         } else {
             const { gold, interest } = info.reward;
-            set("choose-badge", info.guardian ? "GUARDIÁN VENCIDO" : `PISO ${info.floor} SUPERADO`);
+            set("choose-badge", info.guardian ? "Guardián vencido" : `Piso ${info.floor} superado`);
             set("choose-title", "Elige una carta gratis");
             set("choose-text", `Ganaste ${gold} de oro${interest ? ` y ${interest} de interés` : ""}. `
                 + "Las otras dos cartas quedarán en la tienda.");
         }
         const cards = items.map((item, index) => {
-            const card = document.createElement("button");
-            card.className = `blessing-card rarity-${item.rarity}`;
-            const label = shop ? `${index + 1} · ${item.rarity_name} · ${item.price} de oro`
-                : `${index + 1} · ${item.rarity_name} · gratis`;
-            [["blessing-key", label], ["blessing-name", item.name],
-                ["blessing-text", item.description]].forEach(([className, text]) => {
-                const span = document.createElement("span");
-                span.className = className;
-                span.textContent = text;
-                card.appendChild(span);
-            });
+            const card = el("button", `blessing-card rarity-${item.rarity}`);
+            card.style.setProperty("--i", index);
+            const iconBox = el("span", "card-icon");
+            iconBox.append(icon(`i-card-${item.id}`));
+            const meta = el("span", "card-meta");
+            meta.append(el("span", "card-rarity", item.rarity_name));
+            const price = el("span", "card-price");
+            if (shop) {
+                price.append(icon("i-coin"), String(item.price));
+            } else {
+                price.textContent = "Gratis";
+            }
+            meta.append(price);
+            card.append(el("span", "card-key", String(index + 1)), iconBox,
+                el("span", "blessing-name", item.name), el("span", "blessing-text", item.description), meta);
+            card.setAttribute("aria-label", `${item.name}, carta ${item.rarity_name.toLowerCase()}. `
+                + `${item.description} ${shop ? `Cuesta ${item.price} de oro.` : "Gratis."}`);
             card.disabled = shop && info.gold < item.price;
             card.addEventListener("click", () => (shop ? this.shopAction("buy", index) : this.choose(index)));
             return card;
@@ -452,9 +544,9 @@ class GameClient {
         this.el.blessingCards.replaceChildren(...cards);
         document.getElementById("shop-actions").classList.toggle("hidden", !shop);
         const reroll = document.getElementById("btn-reroll");
-        reroll.textContent = `Renovar la oferta (${info.shop.reroll_price} de oro)`;
+        reroll.replaceChildren(icon("i-restart"), `Renovar la oferta (${info.shop.reroll_price} de oro)`);
         reroll.disabled = info.gold < info.shop.reroll_price;
-        set("btn-leave-shop", `Bajar al piso ${info.floor + 1}`);
+        document.getElementById("btn-leave-shop").replaceChildren(icon("i-stairs"), `Bajar al piso ${info.floor + 1}`);
         // Al cambiar las cartas con el diálogo abierto, el foco no debe perderse.
         const modal = this.modals.choose;
         if (!modal.classList.contains("hidden") && !modal.contains(document.activeElement)) {
@@ -531,19 +623,120 @@ class GameClient {
     }
 
     updateScores(state, move) {
-        this.el.score.textContent = state.score.toLocaleString("es-CO");
+        this.tweenNumber(this.el.score, "score", state.score);
         this.el.best.textContent = state.highscore.toLocaleString("es-CO");
         if (move && move.points > 0) {
             this.showScoreBubble(move.points);
+            replayClass(this.el.score, "bump");
         }
     }
 
+    /** Cuenta desde el valor mostrado hasta `target` en lugar de saltar. */
+    tweenNumber(node, key, target) {
+        const from = this.shown[key];
+        this.shown[key] = target;
+        cancelAnimationFrame(this.tweens?.[key]);
+        if (prefersReducedMotion() || from === target) {
+            node.textContent = target.toLocaleString("es-CO");
+            return;
+        }
+        this.tweens = this.tweens || {};
+        const start = performance.now();
+        const step = (now) => {
+            const progress = Math.min((now - start) / NUMBER_TWEEN_MS, 1);
+            const eased = 1 - (1 - progress) ** 3;
+            node.textContent = Math.round(from + (target - from) * eased).toLocaleString("es-CO");
+            if (progress < 1) {
+                this.tweens[key] = requestAnimationFrame(step);
+            }
+        };
+        this.tweens[key] = requestAnimationFrame(step);
+    }
+
     showScoreBubble(points) {
-        const bubble = document.createElement("span");
-        bubble.className = "score-bubble";
-        bubble.textContent = `+${points}`;
+        const bubble = el("span", "score-bubble", `+${points}`);
         this.el.bubbles.appendChild(bubble);
         setTimeout(() => bubble.remove(), SCORE_BUBBLE_MS);
+    }
+
+    // --- Efectos visuales (se omiten con «reducir movimiento») -----------------------
+
+    /** Celda de efectos ubicada sobre la casilla (row, col); se borra sola. */
+    fxCell(row, col, lifetime) {
+        const cell = el("div", "fx-cell");
+        cell.style.setProperty("--row", row);
+        cell.style.setProperty("--col", col);
+        this.el.fx.appendChild(cell);
+        setTimeout(() => cell.remove(), lifetime);
+        return cell;
+    }
+
+    /** Partículas que salen disparadas desde una casilla. */
+    burst(row, col, className, color, count) {
+        const cell = this.fxCell(row, col, 800);
+        for (let i = 0; i < count; i += 1) {
+            const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+            const distance = 55 + Math.random() * 35;
+            const particle = el("span", className);
+            particle.style.setProperty("--dx", `${Math.cos(angle) * distance}cqi`);
+            particle.style.setProperty("--dy", `${Math.sin(angle) * distance}cqi`);
+            if (color) {
+                particle.style.setProperty("--spark", color);
+            }
+            cell.appendChild(particle);
+        }
+    }
+
+    /** Chispas del color de cada fusión y los puntos subiendo desde la mayor. */
+    playMoveEffects(data) {
+        if (prefersReducedMotion() || !data.merged_cells.length) {
+            return;
+        }
+        let best = data.merged_cells[0];
+        data.merged_cells.forEach(([row, col]) => {
+            const tile = this.tileElements.get(`${row},${col}`);
+            const color = tile ? getComputedStyle(tile.firstChild).backgroundColor : null;
+            this.burst(row, col, "fx-spark", color, 8);
+            if (data.grid[row][col] > data.grid[best[0]][best[1]]) {
+                best = [row, col];
+            }
+        });
+        if (data.points > 0) {
+            const streak = data.expedition ? data.expedition.streak : 0;
+            const heat = streak >= 6 ? 3 : streak >= 3 ? 2 : streak >= 1 ? 1 : 0;
+            const label = el("span", `fx-points heat-${data.expedition ? heat : 0}`, `+${data.points}`);
+            if (data.expedition && data.expedition.streak_bonus > 1) {
+                label.append(el("small", "", `×${data.expedition.streak_bonus.toLocaleString("es-CO")}`));
+            }
+            this.fxCell(best[0], best[1], 1000).appendChild(label);
+        }
+    }
+
+    /** Nube de polvo donde una carta borró fichas o piedras. */
+    puffRemovedTiles(before, after) {
+        if (prefersReducedMotion()) {
+            return;
+        }
+        before.forEach((rowValues, row) => rowValues.forEach((value, col) => {
+            if (value && !after[row][col]) {
+                this.burst(row, col, "fx-dust", null, 6);
+            }
+        }));
+    }
+
+    /** Lluvia de monedas sobre el tablero al superar un piso. */
+    coinRain() {
+        this.sound.playCoin();
+        if (prefersReducedMotion()) {
+            return;
+        }
+        for (let i = 0; i < COINS_PER_RAIN; i += 1) {
+            const coin = icon("i-coin", "icon fx-coin");
+            coin.style.setProperty("left", `${4 + Math.random() * 86}%`);
+            coin.style.setProperty("animation-delay", `${Math.random() * 0.45}s`);
+            this.el.fx.appendChild(coin);
+            setTimeout(() => coin.remove(), 1900);
+        }
     }
 
     playMoveSound(data) {
@@ -573,6 +766,7 @@ class GameClient {
         const transition = firstLoad ? null : statusTransition(previousStatus, state.status);
         if (transition === "choosing") {
             this.sound.playWin();
+            this.coinRain();
             this.announce(`Piso ${state.expedition.floor} superado. Ganaste `
                 + `${state.expedition.reward.gold} de oro. Elige una carta gratis con las teclas 1, 2 o 3.`);
         } else if (transition === "won") {

@@ -4,6 +4,24 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 proyecto usa [versionado semántico](https://semver.org/lang/es/). Los
 identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLOS.md).
 
+## [2.3.0] - 2026-11-25
+
+### Agregado (mantenimiento perfectivo)
+- Identidad visual «La Mina»: paleta de piedra y antorcha, tipografía Lilita One
+  para números y títulos, fichas con bisel y tablero con volumen.
+- Más de 30 iconos SVG propios (sin bibliotecas): cartas, maldiciones, oro,
+  racha, piso, modos y botones.
+- Efectos al puntuar: chispas del color de cada fusión, puntos que suben desde la
+  ficha con el color de la racha, marcadores que cuentan hacia arriba y llama de
+  racha que crece.
+- Lluvia de monedas al superar un piso, cartas repartidas con giro y brillo en las
+  legendarias, polvo donde una carta borra fichas, temblor con Terremoto,
+  destellos del Fénix y del Escudo y bruma animada con Niebla.
+- Sonidos de moneda y de carta.
+
+### Cambiado
+- Las etiquetas dejan de estar en mayúsculas; el título de la página es «2048: La Mina».
+
 ## [2.2.0] - 2026-11-25
 
 ### Agregado (mantenimiento perfectivo)
