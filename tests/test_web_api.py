@@ -206,3 +206,39 @@ def test_choose_in_classic_mode_returns_409(api_server):
     status, _, data = send_request(api_server, "POST", "/api/choose", body={"index": 0})
     assert status == 409
     assert "elección" in data["error"]
+
+
+# --- Cambio de modo dentro de la aplicación -------------------------------------
+
+def test_classic_state_reports_its_mode(api_server):
+    _, _, data = send_request(api_server, "GET", "/api/state")
+    assert data["mode"] == "classic"
+
+
+def test_switching_to_classic_and_back_keeps_each_game(expedition_server):
+    expedition = expedition_server.game
+    send_request(expedition_server, "POST", "/api/move", body={"direction": "left"})
+    status, _, classic = send_request(expedition_server, "POST", "/api/mode",
+                                      body={"mode": "classic"})
+    assert status == 200
+    assert classic["mode"] == "classic"
+    assert classic["size"] == expedition.size
+    _, _, state = send_request(expedition_server, "GET", "/api/state")
+    assert state["mode"] == "classic"
+    _, _, back = send_request(expedition_server, "POST", "/api/mode",
+                              body={"mode": "expedition"})
+    assert back["expedition"]["seed"] == 7
+    assert back["grid"] == expedition.game.grid
+
+
+def test_switching_to_expedition_from_classic_creates_one(api_server):
+    status, _, data = send_request(api_server, "POST", "/api/mode",
+                                   body={"mode": "expedition"})
+    assert status == 200
+    assert data["expedition"]["floor"] == 1
+
+
+@pytest.mark.parametrize("mode", ["arcade", "", None, 1])
+def test_unknown_mode_returns_400(api_server, mode):
+    status, _, _ = send_request(api_server, "POST", "/api/mode", body={"mode": mode})
+    assert status == 400

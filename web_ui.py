@@ -33,10 +33,12 @@ from config import (
     ALLOWED_HOSTNAMES,
     DEFAULT_HOST,
     DEFAULT_PORT,
+    GAME_MODES,
     MAX_REQUEST_BODY_BYTES,
     PORT_SEARCH_ATTEMPTS,
 )
 from logic import Game2048
+from roguelike import Expedition
 from validation import validate_port
 
 logger = logging.getLogger(__name__)
@@ -123,8 +125,23 @@ class GameServer(HTTPServer):
     allow_reuse_address = os.name != "nt"
 
     def __init__(self, address: tuple[str, int], game: Game2048):
-        self.game = game
+        # Una partida por modo: cambiar de modo no borra el progreso del otro.
+        self.games = {game.MODE: game}
+        self.mode = game.MODE
         super().__init__(address, GameRequestHandler)
+
+    @property
+    def game(self):
+        """Partida del modo activo (Game2048 o Expedition)."""
+        return self.games[self.mode]
+
+    def switch_mode(self, mode: str) -> None:
+        """Activa otro modo; la primera vez crea su partida con el mismo tamaño."""
+        if mode not in self.games:
+            current = self.game
+            game_class = Expedition if mode == Expedition.MODE else Game2048
+            self.games[mode] = game_class(size=current.size, storage=current._storage)
+        self.mode = mode
 
     def server_bind(self) -> None:
         # HTTPServer resuelve el nombre del equipo con getfqdn(), lo que en algunas
@@ -188,6 +205,7 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
             "/api/reset": self._api_reset,
             "/api/continue": self._api_continue,
             "/api/choose": self._api_choose,
+            "/api/mode": self._api_mode,
         }
         action = actions.get(path)
         try:
@@ -226,6 +244,14 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
     def _api_continue(self, payload: dict) -> dict:
         if not self.game.continue_playing():
             raise RequestError(409, "No hay una victoria pendiente")
+        return self.game.to_dict()
+
+    def _api_mode(self, payload: dict) -> dict:
+        mode = payload.get("mode")
+        if mode not in GAME_MODES:
+            modes = ", ".join(GAME_MODES)
+            raise RequestError(400, f"Modo desconocido; usa uno de: {modes}")
+        self.server.switch_mode(mode)
         return self.game.to_dict()
 
     def _api_choose(self, payload: dict) -> dict:

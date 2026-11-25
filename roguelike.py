@@ -53,6 +53,8 @@ class Expedition:
     API web (move, undo, reset, continue_playing, to_dict) y además choose().
     """
 
+    MODE = "expedition"
+
     def __init__(
         self,
         size: int = DEFAULT_BOARD_SIZE,
@@ -193,7 +195,7 @@ class Expedition:
     def to_dict(self) -> dict:
         data = self.game.to_dict()
         data.update(
-            mode="expedition",
+            mode=self.MODE,
             status=self.status,
             won=self.outcome == "won",
             game_over=self.outcome == "lost",

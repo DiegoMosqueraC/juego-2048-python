@@ -19,6 +19,9 @@ STONE = -1
 # Jugadas que se pueden deshacer; limita el consumo de memoria del historial.
 MAX_UNDO_HISTORY = 20
 
+# --- Modos de juego que se eligen dentro de la interfaz web ------------------
+GAME_MODES = ("classic", "expedition")
+
 # --- Modo expedición (roguelike) --------------------------------------------
 # Ficha objetivo de cada piso; superar el último gana la expedición.
 EXPEDITION_TARGETS = (64, 128, 256, 512, 1024, 2048)

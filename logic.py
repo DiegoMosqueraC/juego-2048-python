@@ -190,6 +190,8 @@ def slide_line(line: Sequence[int]) -> LineResult:
 class Game2048:
     """Gestiona el estado y las reglas de una partida de 2048."""
 
+    MODE = "classic"
+
     def __init__(
         self,
         size: int = DEFAULT_BOARD_SIZE,
@@ -451,6 +453,7 @@ class Game2048:
     def to_dict(self) -> dict:
         """Estado serializable para la API web (el tablero se entrega como copia)."""
         return {
+            "mode": self.MODE,
             "size": self.size,
             "grid": [row[:] for row in self.grid],
             "score": self.score,
