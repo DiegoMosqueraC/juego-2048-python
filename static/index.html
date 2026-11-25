@@ -32,6 +32,18 @@
             </div>
         </header>
 
+        <!-- Selector de modo: cada modo conserva su propia partida -->
+        <div class="mode-switch" role="group" aria-label="Modo de juego">
+            <button class="mode-btn" data-mode="expedition" aria-pressed="false">
+                <span class="mode-name">Expedición</span>
+                <span class="mode-hint">Pisos, bendiciones y maldiciones</span>
+            </button>
+            <button class="mode-btn" data-mode="classic" aria-pressed="false">
+                <span class="mode-name">Clásico</span>
+                <span class="mode-hint">Llega al 2048 sin sorpresas</span>
+            </button>
+        </div>
+
         <!-- Barra de herramientas -->
         <div class="toolbar">
             <p class="instructions">¡Une los números para llegar a <strong id="goal-tile">2048</strong>!</p>
@@ -80,6 +92,18 @@
             </div>
         </div>
 
+        <!-- Modo expedición: piso, objetivo, maldición y recursos de la partida -->
+        <section id="expedition-bar" class="expedition-bar hidden" aria-label="Estado de la expedición">
+            <div class="exp-item"><span class="exp-label">PISO</span><strong id="exp-floor">1/6</strong></div>
+            <div class="exp-item"><span class="exp-label">OBJETIVO</span><strong id="exp-target">64</strong></div>
+            <div class="exp-item exp-curse" id="exp-curse-box"><span class="exp-label">MALDICIÓN</span><strong id="exp-curse">Calma</strong></div>
+            <div class="exp-item hidden" id="exp-moves-box"><span class="exp-label">JUGADAS</span><strong id="exp-moves">0</strong></div>
+            <div class="exp-item"><span class="exp-label">DESHACER</span><strong id="exp-undo">1</strong></div>
+            <div class="exp-item"><span class="exp-label">PUNTOS</span><strong id="exp-multiplier">×1</strong></div>
+            <p id="exp-curse-text" class="exp-curse-text"></p>
+            <p class="exp-seed">Semilla <span id="exp-seed">0</span></p>
+        </section>
+
         <!-- Tablero: el fondo y las fichas se generan según el tamaño de la partida -->
         <main class="game-wrapper">
             <div id="game-board" class="game-board" role="group" aria-label="Tablero de 2048" aria-describedby="controls-help">
@@ -113,6 +137,16 @@
                 </div>
             </div>
 
+            <!-- Diálogo: elegir una bendición al superar un piso (modo expedición) -->
+            <div id="modal-choose" class="game-modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-title" aria-describedby="choose-text">
+                <div class="modal-card modal-card-wide">
+                    <div class="modal-badge win-badge" id="choose-badge">PISO SUPERADO</div>
+                    <h2 id="choose-title">Elige una bendición</h2>
+                    <p id="choose-text">Solo puedes llevarte una. Atajos: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>.</p>
+                    <div id="blessing-cards" class="blessing-cards"></div>
+                </div>
+            </div>
+
             <!-- Diálogo: confirmar reinicio (BUG-13: evita perder la partida por accidente) -->
             <div id="modal-confirm" class="game-modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
                 <div class="modal-card">
@@ -140,6 +174,7 @@
         <footer class="footer">
             <p id="controls-help"><strong>Controles:</strong> flechas del teclado o <strong>W, A, S, D</strong>. En el celular, desliza el dedo sobre el tablero.</p>
             <p class="shortcuts-note">Atajos: <kbd>U</kbd> deshacer · <kbd>R</kbd> reiniciar</p>
+            <p class="shortcuts-note expedition-help hidden">Expedición: llega a la ficha objetivo de cada piso, elige una bendición y sobrevive a las maldiciones hasta el 2048. Deshacer gasta usos.</p>
         </footer>
     </div>
 

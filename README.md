@@ -2,10 +2,12 @@
 
 [![CI](https://github.com/DiegoMosqueraC/juego-2048-python/actions/workflows/ci.yml/badge.svg)](https://github.com/DiegoMosqueraC/juego-2048-python/actions/workflows/ci.yml)
 
-Recreación del juego **2048** (Cirulli, 2014) escrita en Python con la biblioteca
-estándar: no necesita instalar paquetes para jugar. Ofrece una **interfaz web**
-con animaciones, sonido y accesibilidad, y un **modo terminal** que funciona en
-Linux, macOS y Windows.
+Juego basado en **2048** (Cirulli, 2014) escrito en Python con la biblioteca
+estándar: no necesita instalar paquetes para jugar. En la interfaz web eliges el
+modo con el selector de la parte superior: **Expedición**, una variante tipo
+*roguelike* en la que cada partida es distinta, o **Clásico**. Cada modo conserva
+su propia partida al cambiar de uno a otro. El **modo terminal** juega el clásico
+y funciona en Linux, macOS y Windows.
 
 Este repositorio es también el producto de la asignatura *Codificación y Pruebas
 del Software*: contiene la versión base recibida, el registro de fallos, las
@@ -15,6 +17,36 @@ integración continua.
 ![Interfaz web del juego](docs/img/web_partida.png)
 
 ---
+
+## Modo expedición
+
+Cada partida es una expedición de 6 pisos con su propia **semilla**:
+
+1. Cada piso tiene una ficha objetivo: 64, 128, 256, 512, 1024 y, en el último, 2048.
+   El tablero se conserva de un piso al siguiente.
+2. Al superar un piso eliges **1 de 3 bendiciones** sorteadas:
+
+   | Bendición | Efecto |
+   | :--- | :--- |
+   | Segunda oportunidad | Suma 2 usos de deshacer. |
+   | Codicia | Cada fusión da un 50 % más de puntos (acumulable). |
+   | Escoba | Elimina todas las fichas de 2. |
+   | Trébol | Más fichas nuevas de 4 (hasta 50 %). |
+   | Dinamita | Destruye todas las piedras (solo aparece si hay piedras). |
+
+3. Desde el piso 2, cada piso trae una **maldición** sorteada:
+
+   | Maldición | Efecto |
+   | :--- | :--- |
+   | Calma | Ninguno. |
+   | Piedra | Aparece un bloque que no se mueve ni se fusiona y parte la fila. |
+   | Prisa | Tienes objetivo ÷ 3 jugadas para llegar a la ficha del piso. |
+
+4. Deshacer gasta usos: empiezas con uno. Si el tablero se bloquea o se acaban las
+   jugadas de *Prisa*, la expedición termina.
+
+La semilla aparece en pantalla; con `--semilla N` se repite la misma expedición.
+Las reglas están en [`roguelike.py`](roguelike.py).
 
 ## Requisitos
 
@@ -40,6 +72,8 @@ Opciones adicionales:
 | :--- | :--- | :--- |
 | `--port N`, `-p N` | Puerto del servidor web (1-65535). Si está ocupado se prueba el siguiente. | 8080 |
 | `--size N`, `-s N` | Lado del tablero, de 2 a 8. | 4 |
+| `--clasico` | La web abre con el modo Clásico seleccionado (se puede cambiar en la página). | Expedición |
+| `--semilla N` | Repite la expedición de esa semilla (entero ≥ 0). | Al azar |
 | Variable `JUEGO2048_DATA_DIR` | Carpeta donde se guarda `highscore.json`. | Carpeta del programa |
 
 ## Controles
@@ -47,7 +81,8 @@ Opciones adicionales:
 | Acción | Web | Terminal |
 | :--- | :--- | :--- |
 | Mover | Flechas, `W` `A` `S` `D`, deslizar el dedo o botones táctiles | Flechas o `W` `A` `S` `D` |
-| Deshacer | `U` o botón **Deshacer** | `U` |
+| Deshacer | `U` o botón **Deshacer** (en la expedición gasta un uso) | `U` |
+| Elegir bendición | `1`, `2`, `3` o clic en la carta | — |
 | Reiniciar | `R` o botón **Reiniciar** (pide confirmación si hay puntos) | `R` |
 | Seguir tras ganar | Botón **Seguir jugando** | `C` |
 | Tema claro/oscuro y sonido | Botones de la barra superior | — |
@@ -69,6 +104,7 @@ static/ (index.html, style.css, app.js, game-utils.js)
 | `validation.py` | Validación defensiva de dirección, tamaño, tablero, puntuación y puerto. |
 | `storage.py` | Récord en JSON con escritura atómica; interfaz `HighscoreStorage`. |
 | `logic.py` | Reglas del juego. Recibe el almacenamiento y el azar por inyección de dependencias. |
+| `roguelike.py` | Modo expedición: pisos, maldiciones, bendiciones, usos de deshacer y semilla. |
 | `web_ui.py` | Servidor HTTP local, API JSON y cabeceras de seguridad. |
 | `terminal_ui.py` | Modo terminal con `curses` o modo de texto básico. |
 | `static/` | Cliente web: animaciones, sonido sintetizado, accesibilidad y temas. |
@@ -83,6 +119,13 @@ static/ (index.html, style.css, app.js, game-utils.js)
 | `POST /api/undo` | `{}` | Estado + `undone` |
 | `POST /api/reset` | `{}` | Estado de la partida nueva |
 | `POST /api/continue` | `{}` | Estado, o `409` si no hay una victoria pendiente |
+| `POST /api/mode` | `{"mode": "classic"}` o `{"mode": "expedition"}` | Estado de la partida de ese modo; `400` si el modo no existe |
+| `POST /api/choose` | `{"index": 0}` | Estado del piso siguiente; `400` si el índice no es 0, 1 o 2; `409` si no hay elección pendiente |
+
+Todo estado incluye `mode` (`"classic"` o `"expedition"`). En la expedición trae además un objeto
+`expedition` con el piso, el objetivo, la maldición, las jugadas restantes, los
+usos de deshacer, el multiplicador, la semilla y las bendiciones ofrecidas. Las
+piedras llegan en `grid` con el valor `-1`.
 
 Los comandos deben enviarse con `Content-Type: application/json`, el cuerpo no
 puede superar 1 KB y el servidor solo acepta nombres de host locales.
@@ -103,8 +146,8 @@ bandit -r . -x ./tests,./docs           # análisis de seguridad
 | Advertencias de flake8 | 63 | 0 |
 | Hallazgos de bandit | 4 | 0 |
 | Complejidad ciclomática de `move()` | 13 | 3 |
-| Pruebas automatizadas | 12 | 283 (273 Python + 10 JavaScript) |
-| Cobertura de sentencias y ramas | 40 % | 96,6 % |
+| Pruebas automatizadas | 12 | 355 (345 Python + 10 JavaScript) |
+| Cobertura de sentencias y ramas | 40 % | 97,3 % |
 
 El flujo [`.github/workflows/ci.yml`](.github/workflows/ci.yml) ejecuta los mismos
 pasos en Ubuntu y Windows con Python 3.10 y 3.12 en cada *push* o *pull request*.

@@ -14,8 +14,21 @@ WINNING_TILE = 2048
 INITIAL_TILE_COUNT = 2
 # Probabilidad de que una ficha nueva sea 4 en lugar de 2 (regla del 2048 original).
 PROBABILITY_OF_FOUR = 0.1
+# Celda bloqueada del modo expedición: no se mueve ni se fusiona.
+STONE = -1
 # Jugadas que se pueden deshacer; limita el consumo de memoria del historial.
 MAX_UNDO_HISTORY = 20
+
+# --- Modos de juego que se eligen dentro de la interfaz web ------------------
+GAME_MODES = ("classic", "expedition")
+
+# --- Modo expedición (roguelike) --------------------------------------------
+# Ficha objetivo de cada piso; superar el último gana la expedición.
+EXPEDITION_TARGETS = (64, 128, 256, 512, 1024, 2048)
+STARTING_UNDO_CHARGES = 1
+# «Prisa» da objetivo ÷ 3 jugadas: alcanza con margen, pero obliga a no perder tiempo.
+HASTE_DIVISOR = 3
+MAX_PROBABILITY_OF_FOUR = 0.5
 
 # --- Direcciones admitidas ---------------------------------------------------
 DIRECTIONS = ("left", "right", "up", "down")

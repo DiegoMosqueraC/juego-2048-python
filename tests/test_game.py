@@ -279,7 +279,7 @@ def test_from_grid_rejects_invalid_boards(grid):
 def test_to_dict_contains_the_public_contract_of_the_api(make_game):
     state = make_game().to_dict()
     assert set(state) == {
-        "size", "grid", "score", "highscore", "won", "game_over", "status",
+        "mode", "size", "grid", "score", "highscore", "won", "game_over", "status",
         "max_tile", "winning_tile", "can_undo",
     }
 

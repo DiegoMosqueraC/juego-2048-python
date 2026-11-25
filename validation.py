@@ -8,6 +8,7 @@ lanzan ValueError con un mensaje claro cuando la entrada no es válida.
 """
 
 from config import (
+    STONE,
     DIRECTION_ALIASES,
     DIRECTIONS,
     MAX_BOARD_SIZE,
@@ -70,8 +71,9 @@ def validate_grid(value: object) -> list[list[int]]:
     size = validate_board_size(len(value))
     if any(len(row) != size for row in value):
         raise ValueError("El tablero debe ser cuadrado")
-    if not all(is_valid_tile(cell) for row in value for cell in row):
-        raise ValueError("Las fichas deben ser 0 o potencias de 2 mayores que 1")
+    if not all(cell == STONE or is_valid_tile(cell) for row in value for cell in row):
+        raise ValueError(
+            "Las fichas deben ser 0, piedras o potencias de 2 mayores que 1")
     return [row[:] for row in value]
 
 
@@ -79,6 +81,13 @@ def validate_score(value: object) -> int:
     """Verifica que una puntuación sea un entero no negativo."""
     if not is_strict_int(value) or value < 0:
         raise ValueError("La puntuación debe ser un entero no negativo")
+    return value
+
+
+def validate_seed(value: object) -> int:
+    """Verifica la semilla de una expedición: un entero no negativo."""
+    if not is_strict_int(value) or value < 0:
+        raise ValueError("La semilla debe ser un entero no negativo")
     return value
 
 

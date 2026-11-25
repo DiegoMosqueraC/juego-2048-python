@@ -14,6 +14,7 @@ import pytest
 import main
 import web_ui
 from logic import Game2048
+from roguelike import Expedition
 
 
 # --- Argumentos de la línea de comandos -------------------------------------------
@@ -74,8 +75,27 @@ def test_main_starts_the_web_server_with_the_requested_options():
     kwargs = run_server.call_args.kwargs
     assert kwargs["port"] == 9000
     assert kwargs["open_browser"] is True
-    assert isinstance(kwargs["game"], Game2048)
+    assert isinstance(kwargs["game"], Expedition)
     assert kwargs["game"].size == 5
+
+
+def test_main_web_classic_mode_uses_the_classic_game():
+    with mock.patch("web_ui.run_server") as run_server:
+        assert main.main(["--web", "--clasico"]) == 0
+    game = run_server.call_args.kwargs["game"]
+    assert isinstance(game, Game2048)
+
+
+def test_main_web_with_seed_replays_an_expedition():
+    with mock.patch("web_ui.run_server") as run_server:
+        assert main.main(["--web", "--semilla", "42"]) == 0
+    assert run_server.call_args.kwargs["game"].seed == 42
+
+
+@pytest.mark.parametrize("seed", ["-1", "abc", "1.5"])
+def test_invalid_seed_is_rejected(seed, capsys):
+    with pytest.raises(SystemExit):
+        main.build_parser().parse_args(["--semilla", seed])
 
 
 def test_main_starts_the_terminal_mode():

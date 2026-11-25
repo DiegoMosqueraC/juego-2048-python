@@ -4,6 +4,22 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 proyecto usa [versionado semántico](https://semver.org/lang/es/). Los
 identificadores `BUG-xx` remiten a [docs/REGISTRO_FALLOS.md](docs/REGISTRO_FALLOS.md).
 
+## [2.1.0] - 2026-11-25
+
+### Agregado (mantenimiento perfectivo)
+- Modo expedición (`roguelike.py`): 6 pisos con ficha objetivo, 5 bendiciones a
+  elegir, 3 maldiciones, usos de deshacer limitados y semilla repetible.
+- Piedras en el tablero: celdas que no se mueven ni se fusionan (`slide_line`).
+- Ruta `POST /api/choose` y opciones `--clasico` y `--semilla`.
+- Selector de modo en la interfaz web (Expedición o Clásico) y ruta `POST /api/mode`;
+  el servidor guarda una partida por modo, así cambiar no borra el progreso.
+- Barra de la expedición, cartas de bendición y piedras en la interfaz web.
+- 72 pruebas nuevas (`test_expedicion.py`, `test_piedras.py`, API y `main.py`).
+
+### Cambiado
+- La interfaz web abre en el modo expedición; `--clasico` la abre en el modo clásico.
+- El estado de la API incluye el campo `mode`.
+
 ## [2.0.0] - 2026-10-21
 
 ### Corregido (mantenimiento correctivo)
