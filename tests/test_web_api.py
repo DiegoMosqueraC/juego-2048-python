@@ -150,3 +150,59 @@ def test_parse_json_body_rejections(length, body, status):
 
 def test_parse_json_body_without_body_is_an_empty_object():
     assert parse_json_body(None, io.BytesIO(b"").read) == {}
+
+
+# --- Modo expedición -------------------------------------------------------------
+
+@pytest.fixture
+def expedition_server():
+    from doubles import FakeHighscoreStorage
+    from roguelike import Expedition
+    from web_ui import create_server
+    import threading
+
+    server = create_server(Expedition(storage=FakeHighscoreStorage(), seed=7), port=0)
+    thread = threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True)
+    thread.start()
+    yield server
+    server.shutdown()
+    server.server_close()
+
+
+def test_expedition_state_reports_the_floor(expedition_server):
+    _, _, data = send_request(expedition_server, "GET", "/api/state")
+    assert data["mode"] == "expedition"
+    assert data["expedition"]["floor"] == 1
+
+
+def test_choose_applies_a_blessing_and_advances(expedition_server):
+    expedition = expedition_server.game
+    expedition.game.grid = [[32, 32, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    _, _, moved = send_request(expedition_server, "POST", "/api/move",
+                               body={"direction": "left"})
+    assert moved["status"] == "choosing"
+    status, _, data = send_request(expedition_server, "POST", "/api/choose",
+                                   body={"index": 0})
+    assert status == 200
+    assert data["expedition"]["floor"] == 2
+
+
+def test_choose_with_an_invalid_index_returns_400(expedition_server):
+    expedition = expedition_server.game
+    expedition.game.grid = [[32, 32, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    send_request(expedition_server, "POST", "/api/move", body={"direction": "left"})
+    status, _, _ = send_request(expedition_server, "POST", "/api/choose",
+                                body={"index": 9})
+    assert status == 400
+
+
+def test_choose_without_a_pending_choice_returns_409(expedition_server):
+    status, _, _ = send_request(expedition_server, "POST", "/api/choose",
+                                body={"index": 0})
+    assert status == 409
+
+
+def test_choose_in_classic_mode_returns_409(api_server):
+    status, _, data = send_request(api_server, "POST", "/api/choose", body={"index": 0})
+    assert status == 409
+    assert "elección" in data["error"]

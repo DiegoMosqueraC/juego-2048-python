@@ -18,7 +18,8 @@ from pathlib import Path
 
 from config import DEFAULT_BOARD_SIZE, DEFAULT_PORT
 from logic import Game2048
-from validation import validate_board_size, validate_port
+from roguelike import Expedition
+from validation import validate_board_size, validate_port, validate_seed
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
@@ -64,6 +65,10 @@ def build_parser() -> argparse.ArgumentParser:
                         default=DEFAULT_BOARD_SIZE,
                         help=f"lado del tablero, de 2 a 8 (por defecto "
                              f"{DEFAULT_BOARD_SIZE})")
+    parser.add_argument("--clasico", action="store_true",
+                        help="jugar el 2048 clásico en la web en vez de la expedición")
+    parser.add_argument("--semilla", type=_argument_type(validate_seed),
+                        help="repetir la expedición de esa semilla")
     return parser
 
 
@@ -108,8 +113,11 @@ def main(argv: list[str] | None = None) -> int:
         launch_terminal_game(Game2048(size=args.size))
     elif mode == "web":
         from web_ui import run_server
-        run_server(port=args.port, open_browser=args.web or interactive,
-                   game=Game2048(size=args.size))
+        if args.clasico:
+            game = Game2048(size=args.size)
+        else:
+            game = Expedition(size=args.size, seed=args.semilla)
+        run_server(port=args.port, open_browser=args.web or interactive, game=game)
     else:
         print("¡Hasta luego!")
     return 0

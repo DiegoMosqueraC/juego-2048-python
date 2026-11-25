@@ -187,6 +187,7 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
             "/api/undo": self._api_undo,
             "/api/reset": self._api_reset,
             "/api/continue": self._api_continue,
+            "/api/choose": self._api_choose,
         }
         action = actions.get(path)
         try:
@@ -225,6 +226,17 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
     def _api_continue(self, payload: dict) -> dict:
         if not self.game.continue_playing():
             raise RequestError(409, "No hay una victoria pendiente")
+        return self.game.to_dict()
+
+    def _api_choose(self, payload: dict) -> dict:
+        # Solo la expedición tiene bendiciones; el modo clásico no tiene choose().
+        choose = getattr(self.game, "choose", None)
+        try:
+            chosen = choose is not None and choose(payload.get("index"))
+        except ValueError as error:
+            raise RequestError(400, str(error)) from None
+        if not chosen:
+            raise RequestError(409, "No hay una elección pendiente")
         return self.game.to_dict()
 
     # --- Utilidades ----------------------------------------------------------------

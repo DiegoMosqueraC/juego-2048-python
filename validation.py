@@ -84,6 +84,13 @@ def validate_score(value: object) -> int:
     return value
 
 
+def validate_seed(value: object) -> int:
+    """Verifica la semilla de una expedición: un entero no negativo."""
+    if not is_strict_int(value) or value < 0:
+        raise ValueError("La semilla debe ser un entero no negativo")
+    return value
+
+
 def validate_port(value: object) -> int:
     """
     Verifica un número de puerto TCP. Acepta enteros o texto con dígitos
