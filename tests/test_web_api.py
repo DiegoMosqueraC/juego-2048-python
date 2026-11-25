@@ -287,3 +287,24 @@ def test_daily_must_be_true_or_false(expedition_server, daily):
 def test_daily_reset_in_classic_mode_returns_409(api_server):
     status, _, _ = send_request(api_server, "POST", "/api/reset", body={"daily": True})
     assert status == 409
+
+
+def test_blast_route_removes_a_stone(expedition_server):
+    expedition_server.game.game.grid[0][0] = -1
+    status, _, data = send_request(expedition_server, "POST", "/api/blast",
+                                   body={"row": 0, "col": 0})
+    assert status == 200
+    assert data["grid"][0][0] == 0
+
+
+def test_blast_route_rejects_a_cell_without_stone(expedition_server):
+    expedition_server.game.game.grid[0][0] = 2
+    status, _, _ = send_request(expedition_server, "POST", "/api/blast",
+                                body={"row": 0, "col": 0})
+    assert status == 400
+
+
+def test_blast_in_classic_mode_returns_409(api_server):
+    status, _, _ = send_request(api_server, "POST", "/api/blast",
+                                body={"row": 0, "col": 0})
+    assert status == 409

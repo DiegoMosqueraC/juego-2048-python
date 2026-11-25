@@ -20,6 +20,7 @@ from roguelike import (
     CARD_PRICES,
     CARDS,
     CURSES,
+    STARTING_DYNAMITE,
     GUARDIAN_FLOORS,
     MAX_BOARD_EXPANSION,
     QUAKE_EVERY,
@@ -70,6 +71,7 @@ def test_new_expedition_starts_on_the_first_floor(expedition):
     assert expedition.multiplier == 1.0
     assert expedition.streak == 0
     assert expedition.cards == []
+    assert expedition.dynamite == STARTING_DYNAMITE
     assert expedition.moves_left is None
     assert expedition.status == "playing"
     assert expedition.seed == 7
@@ -274,10 +276,9 @@ def test_card_bag_gives_gold(expedition):
     assert expedition.gold == 5
 
 
-def test_card_dynamite_removes_every_stone(expedition):
-    expedition.game.grid = [[S, 2, 0, 0], [0, 0, S, 0], EMPTY_ROW, EMPTY_ROW]
+def test_card_dynamite_gives_two_cartridges(expedition):
     expedition.take_card("dinamita")
-    assert stones(expedition) == 0
+    assert expedition.dynamite == STARTING_DYNAMITE + 2
 
 
 def test_card_shield_cancels_the_next_curses_once(expedition):
@@ -344,9 +345,7 @@ def test_card_phoenix_saves_the_expedition_once(expedition):
     assert all(value not in (2, 4) for row in expedition.game.grid for value in row)
 
 
-def test_dynamite_is_only_offered_when_there_are_stones(expedition):
-    assert "dinamita" not in expedition._draw_cards(len(CARDS))
-    expedition.game.grid[0][0] = S
+def test_dynamite_is_always_offered(expedition):
     assert "dinamita" in expedition._draw_cards(len(CARDS))
 
 
@@ -675,3 +674,131 @@ def test_legendaries_unlock_when_the_floor_is_reached():
     open_shop(exp)
     exp.shop_action("leave")
     assert "fenix" in exp._draw_cards(len(CARDS))
+
+
+# --- Dificultad por piso ------------------------------------------------------
+
+def test_deep_floors_add_stones_by_themselves(expedition):
+    expedition.game.grid = [[64, 0, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    go_down_to(expedition, 5)
+    # Piso 5: 2 piedras del derrumbe del piso, más las de su maldición si la hay.
+    assert stones(expedition) >= 2
+
+
+def test_early_floors_add_no_extra_stones(expedition):
+    expedition.game.grid = [[64, 0, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    go_down_to(expedition, 2)
+    if not {"piedra", "derrumbe"} & set(expedition.curses):
+        assert stones(expedition) == 0
+
+
+def test_haste_is_tighter_on_deep_floors(expedition):
+    expedition.floor = 4
+    expedition.set_curses(["prisa"])
+    assert expedition.moves_left == expedition.target // 4
+
+
+def test_shop_prices_rise_every_two_floors(expedition):
+    expedition.floor = 3
+    open_shop(expedition, ["codicia"])
+    assert expedition.to_dict()["expedition"]["shop"]["items"][0]["price"] == 5
+
+
+def test_danger_grows_with_the_floor(expedition):
+    assert expedition.to_dict()["expedition"]["danger"] == 1
+    expedition.floor = 4
+    assert expedition.to_dict()["expedition"]["danger"] == 4
+
+
+def test_legendaries_are_expensive(expedition):
+    assert CARD_PRICES["legendaria"] == 15
+
+
+# --- Dinamita ------------------------------------------------------------------
+
+def test_blast_removes_a_stone_and_spends_a_cartridge(expedition):
+    expedition.game.grid = [[S, 2, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    assert expedition.blast(0, 0) is True
+    assert expedition.game.grid[0][0] == 0
+    assert expedition.dynamite == STARTING_DYNAMITE - 1
+    assert expedition.to_dict()["expedition"]["event"] == "dinamita"
+
+
+def test_blast_without_cartridges_fails(expedition):
+    expedition.dynamite = 0
+    expedition.game.grid = [[S, 2, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    assert expedition.blast(0, 0) is False
+    assert expedition.game.grid[0][0] == S
+
+
+@pytest.mark.parametrize("row, col", [(0, 1), (4, 0), (-1, 0), ("0", 0), (0, None)])
+def test_blast_needs_a_stone_inside_the_board(expedition, row, col):
+    expedition.game.grid = [[S, 2, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    with pytest.raises(ValueError):
+        expedition.blast(row, col)
+
+
+def test_blast_can_unblock_a_full_board(expedition):
+    expedition.game.grid = [[S, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 4, 2]]
+    expedition.blast(0, 0)
+    assert expedition.game.can_move()
+
+
+def test_blast_is_not_allowed_while_choosing(expedition):
+    reach_target(expedition)
+    assert expedition.blast(0, 0) is False
+
+
+# --- Modo infinito --------------------------------------------------------------
+
+def win(exp):
+    exp.floor = len(EXPEDITION_TARGETS)
+    reach_target(exp)
+
+
+def test_after_winning_the_endless_mode_offers_a_rare_card(expedition):
+    win(expedition)
+    assert expedition.continue_playing() is True
+    assert expedition.status == "choosing"
+    assert all(CARDS[card].rarity != "comun" for card in expedition._choices)
+    assert expedition.to_dict()["expedition"]["endless"] is True
+
+
+def test_endless_floors_keep_doubling_the_target(expedition):
+    win(expedition)
+    expedition.continue_playing()
+    expedition.choose(0)
+    expedition.shop_action("leave")
+    assert expedition.floor == len(EXPEDITION_TARGETS) + 1
+    assert expedition.target == 4096
+    assert expedition.status == "playing"
+
+
+def test_endless_guardians_and_growth(expedition):
+    assert expedition.is_guardian(9)
+    assert not expedition.is_guardian(8)
+    expedition.endless = True
+    expedition.game.grid = [[64, 0, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    go_down_to(expedition, 9)
+    assert expedition.game.size == 7
+
+
+def test_endless_can_only_start_once(expedition):
+    win(expedition)
+    assert expedition.continue_playing() is True
+    assert expedition.continue_playing() is False
+
+
+def test_losing_in_endless_mode_does_not_count_twice(expedition, progress):
+    win(expedition)
+    assert progress.data["expeditions"] == 1
+    expedition.continue_playing()
+    expedition.choose(0)
+    expedition.shop_action("leave")
+    expedition.set_curses(["prisa"])
+    expedition.moves_left = 1
+    expedition.game.grid = [[2, 0, 0, 0], EMPTY_ROW, EMPTY_ROW, EMPTY_ROW]
+    expedition.move("right")
+    assert expedition.status == "game_over"
+    assert progress.data["expeditions"] == 1
+    assert progress.data["best_floor"] == len(EXPEDITION_TARGETS) + 1

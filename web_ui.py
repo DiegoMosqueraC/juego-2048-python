@@ -207,6 +207,7 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
             "/api/choose": self._api_choose,
             "/api/mode": self._api_mode,
             "/api/shop": self._api_shop,
+            "/api/blast": self._api_blast,
         }
         action = actions.get(path)
         try:
@@ -272,6 +273,19 @@ class GameRequestHandler(SimpleHTTPRequestHandler):
             raise RequestError(400, str(error)) from None
         if not chosen:
             raise RequestError(409, "No hay una elección pendiente")
+        return self.game.to_dict()
+
+    def _api_blast(self, payload: dict) -> dict:
+        # Solo la expedición tiene dinamita; el modo clásico no tiene blast().
+        blast = getattr(self.game, "blast", None)
+        if blast is None:
+            raise RequestError(409, "La dinamita es del modo expedición")
+        try:
+            done = blast(payload.get("row"), payload.get("col"))
+        except ValueError as error:
+            raise RequestError(400, str(error)) from None
+        if not done:
+            raise RequestError(409, "No quedan cartuchos de dinamita")
         return self.game.to_dict()
 
     def _api_shop(self, payload: dict) -> dict:
